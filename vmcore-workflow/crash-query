@@ -1,15 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
-evidence=/data/output/evidence.json; command=
+evidence=/data/output/evidence.json; command=; commands_file=
 while [[ $# -gt 0 ]]; do case "$1" in
   --evidence) evidence=${2:?}; shift 2;; --command) command=${2:?}; shift 2;;
-  -h|--help) echo 'Usage: crash-query [--evidence FILE] --command "crash command"'; exit 0;; *) echo "unknown argument: $1" >&2; exit 2;; esac; done
-[[ -r "$evidence" && -n "$command" ]] || { echo 'evidence and --command are required' >&2; exit 2; }
-readarray -t paths < <(python3 - "$evidence" <<'PY'
+  --commands-file) commands_file=${2:?}; shift 2;;
+  -h|--help) echo 'Usage: crash-query [--evidence FILE] (--command "crash command" | --commands-file PATH)'; exit 0;; *) echo "unknown argument: $1" >&2; exit 2;; esac; done
+[[ -r "$evidence" ]] || { echo 'evidence is required and must be readable' >&2; exit 2; }
+[[ -z "$command" || -z "$commands_file" ]] || { echo '--command and --commands-file are mutually exclusive' >&2; exit 2; }
+if [[ -n "$commands_file" ]]; then
+  [[ -r "$commands_file" && -s "$commands_file" ]] || { echo 'commands file is not readable or is empty' >&2; exit 2; }
+  command_text=$(<"$commands_file")
+else
+  [[ -n "$command" ]] || { echo 'one of --command or --commands-file is required' >&2; exit 2; }
+  command_text=$command
+fi
+paths=()
+while IFS= read -r path; do paths+=("$path"); done < <(python3 - "$evidence" <<'PY'
 import json,sys
 x=json.load(open(sys.argv[1]))['inputs']; print(x['vmlinux']); print(x['vmcore'])
 PY
 )
 log="$(dirname "$evidence")/queries.log"
-{ printf '\n## crash query\n\n```text\n%s\n```\n\n```text\n' "$command"; printf '%s\nexit\n' "$command" | crash -i /dev/stdin "${paths[0]}" "${paths[1]}"; printf '```\n'; } >> "$log" 2>&1 || true
+{ printf '\n## crash query\n\n```text\n%s\n```\n\n```text\n' "$command_text"; printf '%s\nexit\n' "$command_text" | crash -i /dev/stdin "${paths[0]}" "${paths[1]}"; printf '```\n'; } >> "$log" 2>&1 || true
 printf '%s\n' "$log"

@@ -2,19 +2,36 @@
 
 Use this flow when `evidence.json` contains an `xfs_hang` route. Read
 `focus/xfs.txt` first. Do not classify a filesystem hang from a raw vmcore or a
-keyword alone; use `/usr/local/bin/crash-query --command '<crash command>'` for
-all vmcore access and read `queries.log` after every query.
+keyword alone; use `/usr/local/bin/crash-query` for all vmcore access and read
+`queries.log` after every query.
 
 ## Evidence sequence
 
-1. Read the XFS candidate PIDs and raw line ranges in `evidence.json`.
-2. Query `bt -f <pid>` for candidates and any newly relevant task. Use results
-   to distinguish inodegc/ifree, writeback, log-space, AIL, and block-I/O
-   paths.
-3. Extract a waited buffer
+1. Read the XFS candidate PIDs in the `xfs_hang` route in `evidence.json`.
+   Write one `bt <pid>` command for every candidate PID to a temporary commands
+   file and run one batch query:
+
+   ```bash
+   /usr/local/bin/crash-query --commands-file /data/work/xfs-bt.cmds
+   ```
+
+   Do not sample the candidate list or prioritize it by PID, command name,
+   `xlog_grant_head_wait`, or `xfsaild`. Read `queries.log`, then classify all
+   direct `xfs_buf_lock` waiters by the caller above it: `xfs_read_agi` (AGI),
+   `xfs_read_agf` (AGF), `xfs_imap_to_bp` (inode-cluster), or `other`.
+2. If both AGF and inode-cluster groups exist, choose one representative from
+   each group, preferring an inodegc/ifree AGF waiter and a writeback/
+   delalloc inode-cluster waiter. Write a second commands file containing
+   `bt -f <pid>` for both representatives.
+3. Derive a waited buffer
    address only when it is directly visible in the frame arguments.
-4. Use `struct xfs_buf.b_ops <buffer>` and `struct xfs_buf.b_transp <buffer>` to label AGI, AGF, inode-cluster, or
-   unknown.  Record a failed query as missing evidence, not as a type.
+4. Write a third commands file containing `mod -s <matching xfs.ko.debug>`
+   before any struct command when module type information is not already
+   available, plus `struct semaphore <b_sema>`, `struct xfs_buf <buffer>`,
+   `struct xfs_buf.b_ops <buffer>`, and `struct xfs_buf.b_transp <buffer>` for
+   both representatives. Use the results to label AGI,
+   AGF, inode-cluster, or unknown. Record a failed query as missing evidence,
+   not as a type.
 5. Use `b_log_item` and transaction-item evidence only to connect a specific
    holder to a buffer.  Do not infer ownership from an address, a command name,
    or a common mount alone.
