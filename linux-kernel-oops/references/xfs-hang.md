@@ -12,13 +12,14 @@ keyword alone; use `/usr/local/bin/crash-query` for all vmcore access and read
    file and run one batch query:
 
    ```bash
-   /usr/local/bin/crash-query --commands-file /data/work/xfs-bt.cmds
+   /usr/local/bin/crash-query --commands-file /data/work/xfs-bt.cmds --compact-bt
    ```
 
    Do not sample the candidate list or prioritize it by PID, command name,
-   `xlog_grant_head_wait`, or `xfsaild`. Read `queries.log`, then classify all
-   direct `xfs_buf_lock` waiters by the caller above it: `xfs_read_agi` (AGI),
-   `xfs_read_agf` (AGF), `xfs_imap_to_bp` (inode-cluster), or `other`.
+   `xlog_grant_head_wait`, or `xfsaild`. Read the compact function-level
+   summary in `queries.log`, then classify all direct `xfs_buf_lock` waiters by
+   the caller above it: `xfs_read_agi` (AGI), `xfs_read_agf` (AGF),
+   `xfs_imap_to_bp` (inode-cluster), or `other`.
 2. If both AGF and inode-cluster groups exist, choose one representative from
    each group, preferring an inodegc/ifree AGF waiter and a writeback/
    delalloc inode-cluster waiter. Write a second commands file containing

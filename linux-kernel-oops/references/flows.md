@@ -200,8 +200,9 @@ needed `crash-query` commands. Detailed evidence procedure:
 
 3. **Classify direct waiters** — create one `bt <pid>` command for every
    `xfs_hang` route candidate in `evidence.json`, submit it through one
-   `crash-query --commands-file` invocation, and read `queries.log`. Do not
-   sample candidate PIDs. For each resulting group:
+   `crash-query --commands-file --compact-bt` invocation, and read its compact
+   summary in `queries.log`. Do not sample candidate PIDs. For each resulting
+   group:
    - `xfs_buf_lock`: distinguish `xfs_read_agi`, `xfs_read_agf`,
      `xfs_imap_to_bp`, directory/log buffer by the calling function.
    - `xlog_grant_head_wait`: log space exhaustion or stalled log advancement.

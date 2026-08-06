@@ -42,7 +42,7 @@ This skill provides a structured approach to analyzing Linux kernel crash report
 1. **Classification**: Start by identifying the crash type (e.g., Paging Request, BUG, WARNING).
 2. **Extraction**: Use the Basic Primitives to pull structured data (Backtrace, Registers, Taint state).
 3. **Flow Execution**: Follow the specific Analysis Flow for the identified crash type to reach a root cause hypothesis.
-4. **Vmcore entry point**: When vmcore, matching debuginfo, and source are supplied, first run `analyze-vmcore`. Read `evidence.json`, then only the matching `focus/*.txt` file to choose the flow; the user does not classify the problem. Do not read raw vmcore. Use `crash-query --command '<crash command>'` for a single query or `crash-query --commands-file PATH` for a batch, and read `queries.log` after each query.
+4. **Vmcore entry point**: When vmcore, matching debuginfo, and source are supplied, first run `analyze-vmcore`. Read `evidence.json`, then only the matching `focus/*.txt` file to choose the flow; the user does not classify the problem. Do not read raw vmcore. Use `crash-query --command '<crash command>'` for a single query, `crash-query --commands-file PATH` for a batch, or add `--compact-bt` when batch backtraces need a function-level summary; read `queries.log` after each query.
 
 ---
 
