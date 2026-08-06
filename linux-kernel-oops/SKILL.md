@@ -42,7 +42,7 @@ This skill provides a structured approach to analyzing Linux kernel crash report
 1. **Classification**: Start by identifying the crash type (e.g., Paging Request, BUG, WARNING).
 2. **Extraction**: Use the Basic Primitives to pull structured data (Backtrace, Registers, Taint state).
 3. **Flow Execution**: Follow the specific Analysis Flow for the identified crash type to reach a root cause hypothesis.
-4. **Vmcore safety**: Do not give raw vmcore directly to an LLM. First use `crash` with the matching vmlinux to generate text evidence as defined in [vmcore-evidence.md](references/vmcore-evidence.md).
+4. **Vmcore entry point**: When vmcore, matching debuginfo, and source are supplied, first run `analyze-vmcore`. Read `evidence.json`, then only the matching `focus/*.txt` file to choose the flow; the user does not classify the problem. Do not read raw vmcore. Use `crash-query --command '<crash command>'` for iterative verification and read `queries.log` after each query.
 
 ---
 
@@ -77,6 +77,7 @@ Detailed instructions for data extraction can be found in `references/primitives
 Detailed diagnostic steps can be found in `references/flows.md`.
 
 - **Entry point**: Initial triage and classification.
+- **XFS hang / filesystem deadlock**: Automatic vmcore route followed by iterative buffer and transaction evidence queries.
 - **"Unable to handle paging request"**: Memory access violation analysis.
 - **WARNING**: Non-fatal but significant kernel issues.
 - **BUG / BUG_ON**: Intentional kernel assertions.

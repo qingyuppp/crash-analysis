@@ -60,21 +60,22 @@ Do not run `foreach bt` by default because it can produce an excessively large
 evidence file. Add it only after the focused evidence identifies a concrete
 need.
 
-## Outputs
+## Compact outputs
 
 Write these files to the evidence output directory:
 
 ```text
-evidence-manifest.md  input paths, validation results, tool versions, and gaps
-crash.cmds            exact crash command file used
-crash-raw.txt         complete deterministic crash output
-crash-focused.txt     bounded text evidence for downstream agents
+crash-raw.txt         complete deterministic crash output; skill does not read it by default
+evidence.json         inputs, validation, task index, classification, routes, and raw line ranges
+focus/xfs.txt         generated only for an XFS route
+focus/fault.txt       generated only for an Oops/Panic/BUG/WARNING route
+focus/hang.txt        generated only for a generic hang route
+queries.log           initially empty; iterative crash query evidence from the skill
 ```
 
-`crash-focused.txt` must include the input summary, `sys`, `log`, mount data,
-uninterruptible task stacks, and relevant keyword excerpts. It is the default
-input for downstream reasoning. `crash-raw.txt` remains an escalation artifact
-and is read only when focused evidence is insufficient.
+The skill reads `evidence.json` first and then the matching focus file.
+`crash-raw.txt` remains an escalation artifact; use `crash-query` instead of
+opening it when more evidence is needed.
 
 ## Post-evidence routing
 
@@ -83,7 +84,7 @@ Classify the collected text in this order:
 1. A primary Oops, Panic, BUG, or WARNING signature routes to the existing
    crash-type flow. The extracted text, not raw vmcore, becomes its input.
 2. No primary crash signature plus XFS lock or log signals routes to the
-   future XFS hang / filesystem deadlock flow. Relevant signals include
+   XFS hang / filesystem deadlock flow. Relevant signals include
    `xfs_buf_lock`, `xlog_grant_head_wait`, `TASK_UNINTERRUPTIBLE`, and XFS
    worker stacks.
 3. If neither route has sufficient evidence, stop at generic vmcore triage

@@ -1,0 +1,23 @@
+PID: 73713 TASK: ffff91c30fd38000  CPU: 26  COMMAND: "kworker/26:1"
+ #0 [ffffb13e7e1cf430] __schedule
+ #1 [ffffb13e7e1cf5e0] xfs_buf_lock
+ #2 [ffffb13e7e1cf758] xfs_read_agf
+ #3 [ffffb13e7e1cfd88] xfs_difree
+ #4 [ffffb13e7e1cfe78] xfs_inodegc_worker
+
+PID: 318156 TASK: ffff920514550000  CPU: 163  COMMAND: "kworker/u513:24"
+ #0 [ffffb13ea4e27230] __schedule
+ #1 [ffffb13ea4e273e0] xfs_buf_lock
+ #2 [ffffb13ea4e27558] xfs_imap_to_bp
+ #3 [ffffb13ea4e27610] xfs_bmap_btalloc
+ #4 [ffffb13ea4e27e98] worker_thread
+
+PID: 400 TASK: ffff920000000400  CPU: 2  COMMAND: "kworker/2:1"
+ #0 [ffffb13e00000000] __schedule
+ #1 [ffffb13e00000010] blk_mq_get_tag
+ #2 [ffffb13e00000020] submit_bio
+
+PID: 500 TASK: ffff920000000500  CPU: 3  COMMAND: "java"
+ #0 [ffffb13e00000030] __schedule
+ #1 [ffffb13e00000040] rwsem_down_write_slowpath
+ #2 [ffffb13e00000050] down_write

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+run_jc=1
+if [[ ${1:-} == --no-jc ]]; then run_jc=0; shift; fi
+analyze-vmcore "$@"
+[[ $run_jc -eq 0 ]] && exit 0
+command -v jc >/dev/null || { echo 'JoyCode CLI is unavailable' >&2; exit 1; }
+jc '\$linux-kernel-oops Read /data/output/evidence.json, then only the matching /data/output/focus/*.txt. Route automatically. Use /usr/local/bin/crash-query --command for any additional vmcore query; read queries.log after each query. Do not read crash-raw.txt unless a focused query cannot resolve uncertainty. Write /data/output/analysis.md.'

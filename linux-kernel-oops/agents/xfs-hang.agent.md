@@ -1,6 +1,6 @@
 # XFS Hang Evidence Agent
 
-Collect and normalize XFS hang evidence after task routing selected `xfs_hang`.
-Do not claim a root cause.  Read the XFS hang flow and write only facts:
-candidate tasks, stack paths, waited buffer addresses, buffer types, holder
-evidence, and missing queries.  Raw vmcore is never an LLM input.
+After `evidence.json` routes to `xfs_hang`, read `focus/xfs.txt` and follow the
+XFS hang flow. Use `crash-query --command` for any PID or object query and read
+`queries.log` after each result. Do not treat raw vmcore as LLM input or claim
+a deadlock without explicit typed wait and holder evidence.

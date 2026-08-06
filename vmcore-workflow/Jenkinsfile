@@ -1,0 +1,209 @@
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '20', artifactNumToKeepStr: '20'))
+        timeout(time: 6, unit: 'HOURS')
+    }
+
+    parameters {
+        string(name: 'VMCORE_URL', defaultValue: '', description: 'URL to download vmcore (leave empty to use VMCORE_PATH)')
+        string(name: 'VMCORE_PATH', defaultValue: '', description: 'Existing vmcore path on Jenkins node (leave empty to use VMCORE_URL)')
+
+        string(name: 'DMESG_URL', defaultValue: '', description: 'URL to download vmcore-dmesg.txt (leave empty to use DMESG_PATH)')
+        string(name: 'DMESG_PATH', defaultValue: '', description: 'Existing dmesg path on Jenkins node (leave empty to use DMESG_URL)')
+
+        string(name: 'DEBUG_RPM_URL', defaultValue: '', description: 'URL to download kernel debuginfo RPM (leave empty to use DEBUG_RPM_PATH)')
+        string(name: 'DEBUG_RPM_PATH', defaultValue: '', description: 'Existing kernel debuginfo RPM path on Jenkins node (leave empty to use DEBUG_RPM_URL)')
+
+        string(name: 'KERNEL_SRC_URL', defaultValue: '', description: 'URL to download kernel source tarball (.tar, .tar.gz, .tgz, .tar.xz). Leave empty to use KERNEL_SRC_PATH.')
+        string(name: 'KERNEL_SRC_PATH', defaultValue: '', description: 'Existing kernel source path on Jenkins node, used when KERNEL_SRC_URL is empty')
+
+        booleanParam(name: 'RUN_JOYCODE', defaultValue: true, description: 'Run JoyCode analysis (non-interactive) after crash evidence extraction. If false, only extract evidence.')
+        booleanParam(name: 'BUILD_IMAGE', defaultValue: false, description: 'Rebuild the analysis image in Jenkins. Leave false when the development node already built it.')
+    }
+
+    environment {
+        IMAGE_NAME = 'joycode-kernel-oops:openeuler'
+        INPUT_DIR = "${WORKSPACE}/input"
+        DEBUG_DIR = "${WORKSPACE}/debug"
+        OUTPUT_DIR = "${WORKSPACE}/output"
+        KERNEL_DIR = "${WORKSPACE}/kernel"
+    }
+
+    stages {
+        stage('Preflight') {
+            steps {
+                sh '''
+                    set -eu
+                    echo "Running as: $(whoami)"
+                    id
+                    command -v docker
+                    docker ps >/dev/null
+                    command -v curl
+                    # Dockerfile and analyze-vmcore live inside the pre-built image;
+                    # no need to check for them on the host workspace.
+
+                    # Exactly one of URL / PATH must be non-empty for each required input.
+                    check_one() {
+                        name="$1"; url="$2"; path="$3"
+                        if [ -n "$url" ] && [ -n "$path" ]; then
+                            echo "$name: both URL and PATH are set; pick one" >&2; exit 2
+                        fi
+                        if [ -z "$url" ] && [ -z "$path" ]; then
+                            echo "$name: neither URL nor PATH is set" >&2; exit 2
+                        fi
+                    }
+                    check_one VMCORE    "$VMCORE_URL"    "$VMCORE_PATH"
+                    check_one DEBUG_RPM "$DEBUG_RPM_URL" "$DEBUG_RPM_PATH"
+                    check_one KERNEL    "$KERNEL_SRC_URL" "$KERNEL_SRC_PATH"
+
+                    # If a PATH is set, it must exist and be readable on the agent.
+                    [ -z "$VMCORE_PATH"    ] || test -r "$VMCORE_PATH"
+                    [ -z "$DMESG_PATH"     ] || test -r "$DMESG_PATH"
+                    [ -z "$DEBUG_RPM_PATH" ] || test -r "$DEBUG_RPM_PATH"
+                    [ -z "$KERNEL_SRC_PATH" ] || test -d "$KERNEL_SRC_PATH"
+
+                    if [ "$BUILD_IMAGE" != "true" ]; then
+                        docker image inspect "$IMAGE_NAME" >/dev/null
+                    fi
+
+                    mkdir -p "$INPUT_DIR" "$DEBUG_DIR" "$OUTPUT_DIR"
+                    df -h "$WORKSPACE"
+                '''
+            }
+        }
+
+        stage('Build Analysis Image') {
+            when {
+                expression { return params.BUILD_IMAGE }
+            }
+            steps {
+                sh 'docker build --no-cache -f vmcore-workflow/joycode-kernel-oops-openeuler.Dockerfile -t "$IMAGE_NAME" .'
+            }
+        }
+
+        stage('Stage Inputs') {
+            steps {
+                sh '''
+                    set -eu
+                    mkdir -p "$INPUT_DIR" "$DEBUG_DIR" "$OUTPUT_DIR"
+
+                    # vmcore
+                    rm -f "$INPUT_DIR/vmcore"
+                    if [ -n "$VMCORE_URL" ]; then
+                        echo "Downloading vmcore..."
+                        curl -fL --retry 3 --retry-delay 5 -o "$INPUT_DIR/vmcore" "$VMCORE_URL"
+                    else
+                        echo "Linking vmcore from $VMCORE_PATH"
+                        ln -s "$VMCORE_PATH" "$INPUT_DIR/vmcore"
+                    fi
+
+                    # dmesg is useful context but vmcore analysis does not require it.
+                    rm -f "$INPUT_DIR/vmcore-dmesg.txt"
+                    if [ -n "$DMESG_URL" ]; then
+                        echo "Downloading dmesg..."
+                        curl -fL --retry 3 --retry-delay 5 -o "$INPUT_DIR/vmcore-dmesg.txt" "$DMESG_URL"
+                    elif [ -n "$DMESG_PATH" ]; then
+                        echo "Linking dmesg from $DMESG_PATH"
+                        ln -s "$DMESG_PATH" "$INPUT_DIR/vmcore-dmesg.txt"
+                    else
+                        echo "No dmesg supplied; crash log will be used."
+                    fi
+
+                    # debuginfo rpm
+                    rm -f "$DEBUG_DIR/kernel-debuginfo.rpm"
+                    if [ -n "$DEBUG_RPM_URL" ]; then
+                        echo "Downloading debuginfo RPM..."
+                        curl -fL --retry 3 --retry-delay 5 -o "$DEBUG_DIR/kernel-debuginfo.rpm" "$DEBUG_RPM_URL"
+                    else
+                        echo "Linking debuginfo RPM from $DEBUG_RPM_PATH"
+                        ln -s "$DEBUG_RPM_PATH" "$DEBUG_DIR/kernel-debuginfo.rpm"
+                    fi
+
+                    ls -lhL "$INPUT_DIR" "$DEBUG_DIR/kernel-debuginfo.rpm"
+                '''
+            }
+        }
+
+        stage('Prepare Kernel Source') {
+            steps {
+                sh '''
+                    set -eu
+                    rm -rf "$KERNEL_DIR"
+
+                    if [ -n "$KERNEL_SRC_URL" ]; then
+                        mkdir -p "$KERNEL_DIR"
+                        src_archive="$INPUT_DIR/kernel-source"
+                        echo "Downloading kernel source archive..."
+                        curl -fL --retry 3 --retry-delay 5 -o "$src_archive" "$KERNEL_SRC_URL"
+                        case "$KERNEL_SRC_URL" in
+                            *.tar.gz|*.tgz)
+                                tar -xzf "$src_archive" -C "$KERNEL_DIR" --strip-components=1
+                                ;;
+                            *.tar.xz|*.txz)
+                                tar -xJf "$src_archive" -C "$KERNEL_DIR" --strip-components=1
+                                ;;
+                            *.tar)
+                                tar -xf "$src_archive" -C "$KERNEL_DIR" --strip-components=1
+                                ;;
+                            *)
+                                echo "Unsupported KERNEL_SRC_URL archive type: $KERNEL_SRC_URL" >&2
+                                exit 2
+                                ;;
+                        esac
+                    else
+                        ln -s "$KERNEL_SRC_PATH" "$KERNEL_DIR"
+                    fi
+
+                    test -r "$KERNEL_DIR/Makefile"
+                    grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL|EXTRAVERSION)' "$KERNEL_DIR/Makefile" || true
+                '''
+            }
+        }
+
+        stage('Run Analysis') {
+            steps {
+                withCredentials([string(credentialsId: 'joycode-api-key', variable: 'JOYCODE_API_KEY')]) {
+                    sh '''
+                        set -eu
+                        extra_args=""
+                        if [ "$RUN_JOYCODE" != "true" ]; then
+                            extra_args="--no-jc"
+                        fi
+                        dmesg_mount=""
+                        if [ -r "$INPUT_DIR/vmcore-dmesg.txt" ]; then
+                            dmesg_mount="-v $INPUT_DIR/vmcore-dmesg.txt:/data/input/dmesg:ro"
+                        fi
+
+                        docker run --rm --network host \
+                            -e JOYCODE_API_KEY="$JOYCODE_API_KEY" \
+                            -e JOYCODE_LOG=debug \
+                            -v "$INPUT_DIR/vmcore:/data/input/vmcore:ro" \
+                            $dmesg_mount \
+                            -v "$DEBUG_DIR/kernel-debuginfo.rpm:/data/input/debuginfo.rpm:ro" \
+                            -v "$KERNEL_DIR:/data/input/kernel:ro" \
+                            -v "$OUTPUT_DIR:/data/output" \
+                            "$IMAGE_NAME" \
+                            run-vmcore-analysis \
+                                --output /data/output/analysis.md \
+                                $extra_args
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            sh '''
+                set +e
+                echo "Output files:"
+                find "$OUTPUT_DIR" -maxdepth 2 -type f -printf '%p %s bytes\\n' 2>/dev/null | sort
+            '''
+            archiveArtifacts artifacts: 'output/**', allowEmptyArchive: true, fingerprint: true
+        }
+    }
+}

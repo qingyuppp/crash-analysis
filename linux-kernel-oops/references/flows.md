@@ -8,10 +8,11 @@ information gathering steps.
 
 ## Table of Contents
 1. [Entry point to all flows](#entry-point-to-all-flows)
-2. ["Unable to handle paging request" flow](#unable-to-handle-paging-request-flow)
-3. [WARNING flow](#warning-flow)
-4. [BUG / BUG_ON flow](#bug--bug_on-flow)
-5. [Panic flow](#panic-flow)
+2. [XFS hang / filesystem deadlock flow](#xfs-hang--filesystem-deadlock-flow)
+3. ["Unable to handle paging request" flow](#unable-to-handle-paging-request-flow)
+4. [WARNING flow](#warning-flow)
+5. [BUG / BUG_ON flow](#bug--bug_on-flow)
+6. [Panic flow](#panic-flow)
 
 ---
 
@@ -43,23 +44,22 @@ if no `report.patch` was produced, or Step 6 if patcher returned
 
 ### Vmcore input routing
 
-If the user supplied a vmcore, run **Vmcore Evidence Acquisition** before
-considering the legacy Fetcher. Read [vmcore-evidence.md](vmcore-evidence.md)
-and use the vmcore evidence agent. Do not pass raw vmcore to later agents.
+If the user supplied a vmcore, run `analyze-vmcore` before considering the
+legacy Fetcher. The user need not classify the issue. Read `evidence.json`,
+then only the matched `focus/*.txt` file; do not pass raw vmcore to the skill.
 
 After evidence acquisition:
 
 - Route a primary Oops, Panic, BUG, or WARNING signature to the existing
   crash-type flow, using extracted text evidence as its input.
-- Route XFS lock or log evidence without a primary crash signature to the
-  **XFS hang / filesystem deadlock** flow in [xfs-hang.md](xfs-hang.md).
+- Route XFS lock evidence without a primary crash signature to the **XFS hang
+  / filesystem deadlock** flow in [xfs-hang.md](xfs-hang.md). The flow uses
+  `crash-query` for its iterative `bt -f` and object queries.
 - Otherwise stop at generic vmcore triage with the evidence bundle and state
   the exact additional crash commands needed.
 
 Do not launch the legacy Fetcher merely because a vmcore bundle was supplied
-with matching vmlinux and source already available. The Fetcher continues to
-prepare missing artifacts for text-Oops reports; it does not replace crash
-evidence acquisition.
+with matching vmlinux and source already available.
 
 ### Step 1 — Launch the fetcher agent (optional, recommended for syzbot and distro oops)
 
@@ -179,7 +179,61 @@ a summary in the session notes; do not commit files under `reports/`.
 
 ---
 
+## XFS hang / filesystem deadlock flow
 
+This flow applies after `evidence.json` routed the case as `xfs_hang`. Do not
+enter it from a keyword match alone. Read `focus/xfs.txt`, then issue only the
+needed `crash-query` commands. Detailed evidence procedure:
+[xfs-hang.md](xfs-hang.md).
+
+1. **Preserve the scene** — collect vmcore, matching vmlinux, and XFS module
+   debuginfo. Export `foreach UN bt`. Retain dmesg, mount table, block-device
+   in-flight counts, and I/O/CPU metrics. Do not reboot or run `df` repeatedly
+   — `statfs` amplifies the hang when `inodegc` is stalled.
+
+2. **Locate the blocking centre from all D-state stacks** — split task stacks on
+   blank lines and count module tags and wait functions. Distinguish
+   `xfs_buf_lock`, `xlog_grant_head_wait`, `xfs_inodegc_flush`, inode
+   `i_rwsem`, and block-layer I/O waits. The `[xfs]` module tag count is a
+   lead only; “many tasks stopped at the same wait point” is the primary
+   evidence.
+
+3. **Classify direct waiters** — for each group:
+   - `xfs_buf_lock`: distinguish `xfs_read_agi`, `xfs_read_agf`,
+     `xfs_imap_to_bp`, directory/log buffer by the calling function.
+   - `xlog_grant_head_wait`: log space exhaustion or stalled log advancement.
+   - `xfs_inodegc_flush`: `df`/`statfs` waiting on background inodegc —
+     typically a downstream symptom, not the root.
+
+4. **Promote from stack suspicion to object-level proof** — load
+   `xfs.ko.debug`. Use `bt -f <PID>` and `struct xfs_buf -o` to recover
+   `b_sema` and the `xfs_buf` address. Verify `b_sema.count`, `wait_list`,
+   `b_hold`, `b_ops`, `b_pag`, `b_mount`, and `b_transp`. Use `b_ops` to
+   confirm the object type (`xfs_agf_buf_ops`, `xfs_inode_buf_ops`, etc.) —
+   do not infer type from the function name alone.
+
+5. **Reconstruct the dependency graph and classify the root cause** — correlate
+   `b_transp` with transaction pointers visible in each task stack to establish
+   who holds a lock and who waits. A closed cycle is required to call it a
+   deadlock (e.g. T1 holds AGF, waits inode-cluster; T2 holds inode-cluster,
+   waits AGF). Without a closed cycle, classify as lock contention or prolonged
+   wait, not deadlock. Also check I/O in-flight, XFS shutdown flags, and I/O
+   errors to rule out a stuck lower layer.
+
+6. **Explain the cascade and map to a fix** — the typical progression is:
+
+   ```
+   root buffer lock ─→ inodegc / writeback stalled
+                    ─→ AIL / journal tail cannot advance
+                    ─→ xlog_grant_head_wait accumulates
+                    ─→ statfs/df, container file ops, app threads cascade into D
+   ```
+
+   Compare the confirmed lock order against upstream patches. Verify that the
+   running kernel contains the equivalent code change — do not rely on the
+   distro version string or an unrelated backport. Final output must separate:
+   confirmed facts, strongly associated inferences, items requiring further
+   verification, and fix recommendations.
 
 ## "Unable to handle paging request" flow
 
