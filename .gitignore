@@ -1,14 +1,17 @@
 local.md
 *~
+__pycache__/
+*.py[cod]
 oops-workdir/
 reports/
 
 # Local analysis inputs, experiments, and incident notes.  They can contain
 # customer artefacts and must never enter the private development history.
+docs/
 vmcore-workflow/
+linux-kernel-oops/build-artifacts/
 kdumpai/
 kata-test/
-linux-kernel-oops/utils/人工分析.md
-linux-kernel-oops/utils/prompt.md
-linux-kernel-oops/utils/report.md
-docs/superpowers/plans/2026-07-24-vmcore-entry-routing.md
+test/
+linux-kernel-oops/build-artifacts/
+linux-kernel-oops/utils/
