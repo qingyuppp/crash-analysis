@@ -3,7 +3,27 @@
 import click
 
 
-@click.group()
+BANNER = r"""
+   ____               _       _                _           _
+  / ___|_ __ __ _ ___| |__   / \   _ __   __ _| |_   _ ___(_)___
+ | |   | '__/ _` / __| '_ \ / _ \ | '_ \ / _` | | | | / __| / __|
+ | |___| | | (_| \__ \ | | / ___ \| | | | (_| | | |_| \__ \ \__ \
+  \____|_|  \__,_|___/_| |_/_/   \_\_| |_|\__,_|_|\__, |___/_|___/
+                                                    |___/
+
+  CrashAnalysis
+"""
+
+
+class BannerGroup(click.Group):
+    """Root command group that prepends the CrashAnalysis banner to help."""
+
+    def format_help(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
+        formatter.write(BANNER)
+        super().format_help(ctx, formatter)
+
+
+@click.group(cls=BannerGroup)
 def cli() -> None:
     """Collect and classify deterministic Linux vmcore evidence."""
 
