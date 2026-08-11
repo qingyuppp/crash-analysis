@@ -38,6 +38,12 @@ def test_classify_collection_writes_xfs_route_and_evidence_bundle(tmp_path: Path
     assert evidence["routes"] == [{
         "candidate_pids": [42], "name": "xfs_hang", "reason": "xfs buffer lock waiters detected"
     }]
+    assert evidence["groups"] == [
+        {"subsystem": "unknown", "blocking_site": "unknown", "candidate_pids": [0],
+         "count": 1, "raw_record_count": 1},
+        {"subsystem": "xfs", "blocking_site": "xfs_buf_lock", "candidate_pids": [42],
+         "count": 1, "raw_record_count": 1},
+    ]
     assert evidence["tasks"][1]["comm"] == "swapper/0"
     assert json.loads((output_dir / "evidence.json").read_text()) == evidence
     assert (output_dir / "focus/xfs.txt").is_file()
@@ -61,4 +67,25 @@ def test_classify_command_prints_evidence_artifact_path(tmp_path: Path):
     result = CliRunner().invoke(cli, ["vmcore", "classify", "--collection", str(collection)])
 
     assert result.exit_code == 0
-    assert result.output.strip() == str(tmp_path / "evidence.json")
+    assert "Groups:" in result.output
+    assert "xfs / xfs_buf_lock: 1 PID [42]" in result.output
+    assert "Suggested routes:" in result.output
+    assert "xfs_hang: PIDs [42] reason: xfs buffer lock waiters detected" in result.output
+    assert result.output.rstrip().endswith(str(tmp_path / "evidence.json"))
+
+
+def test_routing_groups_keep_all_pids_but_summary_limits_display_to_twenty():
+    from crashanalysis_cli.classification import build_routing, format_routing_summary
+
+    tasks = [
+        {"pid": pid, "subsystems": ["xfs"], "blocking_site": "xfs_buf_lock"}
+        for pid in range(1, 22)
+    ]
+    routing = build_routing(tasks)
+
+    assert routing["groups"] == [{
+        "subsystem": "xfs", "blocking_site": "xfs_buf_lock",
+        "candidate_pids": list(range(1, 22)), "count": 21, "raw_record_count": 21,
+    }]
+    assert routing["routes"][0]["candidate_pids"] == list(range(1, 22))
+    assert "xfs / xfs_buf_lock: 21 PIDs [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20] (+1 more; see evidence.json)" in format_routing_summary(routing)

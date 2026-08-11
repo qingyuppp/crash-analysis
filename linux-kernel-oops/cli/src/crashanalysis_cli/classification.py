@@ -60,22 +60,71 @@ def parse_tasks(text: str) -> list[dict[str, Any]]:
         })
     return tasks
 
-
-def build_routing(tasks: list[dict[str, Any]]) -> dict[str, Any]:
+# 把逐个 task 的记录，聚合成“哪些类别的任务在等待什么”，然后生成下一步分析的路由提示
+def build_groups(tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     counts: Counter[tuple[str, str]] = Counter()
     unique_pids: dict[tuple[str, str], set[int]] = {}
     for task in tasks:
         key = (task["subsystems"][0] if task["subsystems"] else "unknown", task["blocking_site"])
         counts[key] += 1
         unique_pids.setdefault(key, set()).add(task["pid"])
-    groups = [{"subsystem": subsystem, "blocking_site": site,
-               "count": len(unique_pids[(subsystem, site)]), "raw_record_count": raw_count}
+    return [{"subsystem": subsystem, "blocking_site": site,
+             "candidate_pids": sorted(unique_pids[(subsystem, site)]),
+             "count": len(unique_pids[(subsystem, site)]), "raw_record_count": raw_count}
               for (subsystem, site), raw_count in sorted(counts.items())]
-    xfs_pids = sorted({task["pid"] for task in tasks
-                       if "xfs" in task["subsystems"] and task["blocking_site"] == "xfs_buf_lock"})
-    routes = ([{"name": "xfs_hang", "candidate_pids": xfs_pids,
-                "reason": "xfs buffer lock waiters detected"}] if xfs_pids else [])
+
+
+def build_routes(groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    routes = []
+    for group in groups:
+        if group["subsystem"] == "xfs" and group["blocking_site"] == "xfs_buf_lock":
+            routes.append({"name": "xfs_hang", "candidate_pids": group["candidate_pids"],
+                           "reason": "xfs buffer lock waiters detected"})
+    return routes
+
+
+def build_routing(tasks: list[dict[str, Any]]) -> dict[str, Any]:
+    groups = build_groups(tasks)
+    routes = build_routes(groups)
     return {"groups": groups, "routes": routes}
+
+
+def _format_pid_summary(pids: list[int], limit: int = 20) -> str:
+    noun = "PID" if len(pids) == 1 else "PIDs"
+    displayed = ", ".join(str(pid) for pid in pids[:limit])
+    suffix = f" (+{len(pids) - limit} more; see evidence.json)" if len(pids) > limit else ""
+    return f"{len(pids)} {noun} [{displayed}]{suffix}"
+
+
+def _format_route_pids(pids: list[int], limit: int = 20) -> str:
+    displayed = ", ".join(str(pid) for pid in pids[:limit])
+    suffix = f" (+{len(pids) - limit} more; see evidence.json)" if len(pids) > limit else ""
+    return f"PIDs [{displayed}]{suffix}"
+
+
+def format_routing_summary(routing: dict[str, Any]) -> str:
+    """Format bounded human-facing routing output without truncating artifacts."""
+    lines = ["Groups:"]
+    groups = routing["groups"]
+    if groups:
+        lines.extend(
+            f"  {group['subsystem']} / {group['blocking_site']}: "
+            f"{_format_pid_summary(group['candidate_pids'])}"
+            for group in groups
+        )
+    else:
+        lines.append("  (none)")
+    lines.extend(("", "Suggested routes:"))
+    routes = routing["routes"]
+    if routes:
+        lines.extend(
+            f"  {route['name']}: {_format_route_pids(route['candidate_pids'])} "
+            f"reason: {route['reason']}"
+            for route in routes
+        )
+    else:
+        lines.append("  (none)")
+    return "\n".join(lines)
 
 
 def primary_class(text: str, routing: dict[str, Any]) -> str:

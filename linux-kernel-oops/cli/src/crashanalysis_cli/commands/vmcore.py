@@ -7,7 +7,11 @@ from pathlib import Path
 import click
 
 from crashanalysis_cli.collection import CollectionError, CollectionInputs, collect_vmcore
-from crashanalysis_cli.classification import ClassificationError, classify_collection
+from crashanalysis_cli.classification import (
+    ClassificationError,
+    classify_collection,
+    format_routing_summary,
+)
 from crashanalysis_cli.main import vmcore
 
 
@@ -35,4 +39,5 @@ def classify(collection_path: Path) -> None:
         evidence = classify_collection(collection_path)
     except ClassificationError as error:
         raise click.ClickException(str(error)) from error
+    click.echo(format_routing_summary(evidence))
     click.echo(str(collection_path.parent / "evidence.json"))
