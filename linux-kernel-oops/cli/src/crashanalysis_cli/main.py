@@ -33,6 +33,11 @@ def vmcore() -> None:
     """Collect and classify vmcore evidence."""
 
 
+@vmcore.group()
+def diagnose() -> None:
+    """Run follow-up crash evidence queries."""
+
+
 @cli.group()
 def skills() -> None:
     """Inspect and install bundled analysis skills."""
@@ -40,6 +45,7 @@ def skills() -> None:
 
 from crashanalysis_cli.commands import vmcore as _vmcore  # noqa: E402,F401
 from crashanalysis_cli.commands import skills as _skills  # noqa: E402,F401
+from crashanalysis_cli.commands import diagnose as _diagnose  # noqa: E402,F401
 
 
 if __name__ == "__main__":
