@@ -2,7 +2,7 @@
 
 Use this flow when `evidence.json` contains an `xfs_hang` route. Read
 `focus/xfs.txt` first. Do not classify a filesystem hang from a raw vmcore or a
-keyword alone; use `/usr/local/bin/crash-query` for all vmcore access and read
+keyword alone; use `cra vmcore diagnose` for all vmcore access and read
 `queries.log` after every query.
 
 ## Evidence sequence
@@ -12,7 +12,7 @@ keyword alone; use `/usr/local/bin/crash-query` for all vmcore access and read
    file and run one batch query:
 
    ```bash
-   /usr/local/bin/crash-query --commands-file /data/work/xfs-bt.cmds --compact-bt
+   cra vmcore diagnose compact-bt --evidence /data/output/evidence.json --pids <route candidate PIDs>
    ```
 
    Do not sample the candidate list or prioritize it by PID, command name,

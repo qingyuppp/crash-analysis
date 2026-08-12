@@ -2,7 +2,7 @@
 
 Use this flow when `evidence.json` contains an `xfs_hang` route. Read
 `focus/xfs.txt` first. Do not classify a filesystem hang from a raw vmcore or a
-keyword alone; use `/usr/local/bin/crash-query` for all vmcore access and read
+keyword alone; use `cra vmcore diagnose` for all vmcore access and read
 `queries.log` after every query.
 
 ## Evidence sequence
@@ -12,7 +12,7 @@ keyword alone; use `/usr/local/bin/crash-query` for all vmcore access and read
    file and run one batch query:
 
    ```bash
-   /usr/local/bin/crash-query --commands-file /data/work/xfs-bt.cmds --compact-bt
+   cra vmcore diagnose compact-bt --evidence /data/output/evidence.json --pids <route candidate PIDs>
    ```
 
    Do not sample the candidate list or prioritize it by PID, command name,
@@ -22,15 +22,15 @@ keyword alone; use `/usr/local/bin/crash-query` for all vmcore access and read
    `xfs_imap_to_bp` (inode-cluster), or `other`.
 2. If both AGF and inode-cluster groups exist, choose one representative from
    each group, preferring an inodegc/ifree AGF waiter and a writeback/
-   delalloc inode-cluster waiter. Write a second commands file containing
-   `bt -f <pid>` for both representatives.
+   delalloc inode-cluster waiter. Run `cra vmcore diagnose task --evidence
+   /data/output/evidence.json --pid <pid>` for both representatives.
 3. Derive a waited buffer
    address only when it is directly visible in the frame arguments.
-4. Write a third commands file containing `mod -s <matching xfs.ko.debug>`
-   before any struct command when module type information is not already
-   available, plus `struct semaphore <b_sema>`, `struct xfs_buf <buffer>`,
-   `struct xfs_buf.b_ops <buffer>`, and `struct xfs_buf.b_transp <buffer>` for
-   both representatives. Use the results to label AGI,
+4. Use `cra vmcore diagnose query` for `mod -s <matching xfs.ko.debug>`
+   before any structure command when module type information is not already
+   available. Use `cra vmcore diagnose structure` for `struct semaphore
+   <b_sema>`, `struct xfs_buf <buffer>`, `struct xfs_buf.b_ops <buffer>`, and
+   `struct xfs_buf.b_transp <buffer>` for both representatives. Use the results to label AGI,
    AGF, inode-cluster, or unknown. Record a failed query as missing evidence,
    not as a type.
 5. Use `b_log_item` and transaction-item evidence only to connect a specific
@@ -54,7 +54,9 @@ explicit transaction, lockdep, or task-stack relation to the same typed buffer.
 
 ## Report requirements
 
-Separate facts from hypotheses.  Include the candidate task table, typed
+Write `analysis.md` in Simplified Chinese; preserve kernel symbols, crash
+commands, addresses, and other machine identifiers verbatim. Separate facts
+from hypotheses. Include the candidate task table, typed
 buffer table, wait-for edges, mount/device correlation, confidence, and exact
 next `crash` commands for each missing edge.  Give raw evidence file ranges
 instead of copying large all-UN output into the report.
