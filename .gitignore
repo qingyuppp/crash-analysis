@@ -8,10 +8,12 @@ reports/
 # Local analysis inputs, experiments, and incident notes.  They can contain
 # customer artefacts and must never enter the private development history.
 docs/
-vmcore-workflow/
-linux-kernel-oops/build-artifacts/
+skill/crash-analysis/build-artifacts/
+runtime/analysis*.md
+runtime/*-output/
+runtime/cra-*-output/
 kdumpai/
 kata-test/
-test/
-linux-kernel-oops/build-artifacts/
-linux-kernel-oops/utils/
+!tests/
+!tests/**
+skill/crash-analysis/build-artifacts/

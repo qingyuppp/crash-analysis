@@ -13,12 +13,12 @@
 ### Task 1: All-UN task discovery and routing classifier
 
 **Files:**
-- Create: `vmcore-workflow/lib/classify_evidence.py`
-- Create: `vmcore-workflow/test/fixtures/un-routing-crash.txt`
-- Create: `vmcore-workflow/test/fixtures/xfs-confirmed-crash.txt`
-- Create: `vmcore-workflow/test/fixtures/xfs-suspected-crash.txt`
-- Create: `vmcore-workflow/test/fixtures/oops-crash.txt`
-- Create: `vmcore-workflow/test/test-classify-evidence.py`
+- Create: `runtime/lib/classify_evidence.py`
+- Create: `runtime/tests/fixtures/un-routing-crash.txt`
+- Create: `runtime/tests/fixtures/xfs-confirmed-crash.txt`
+- Create: `runtime/tests/fixtures/xfs-suspected-crash.txt`
+- Create: `runtime/tests/fixtures/oops-crash.txt`
+- Create: `runtime/tests/test-classify-evidence.py`
 
 - [ ] **Step 1: Write failing tests**
 
@@ -41,7 +41,7 @@ Verify the suspected fixture emits `suspected_agf_inode_inversion`; verify an Oo
 
 - [ ] **Step 2: Verify red**
 
-Run: `python3 vmcore-workflow/test/test-classify-evidence.py`
+Run: `python3 runtime/tests/test-classify-evidence.py`
 
 Expected: failure because `classify_evidence.py` does not exist.
 
@@ -57,23 +57,23 @@ reciprocal typed edges exist.
 
 - [ ] **Step 4: Verify green**
 
-Run: `python3 vmcore-workflow/test/test-classify-evidence.py`
+Run: `python3 runtime/tests/test-classify-evidence.py`
 
 Expected: all tests report `OK`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add vmcore-workflow/lib vmcore-workflow/test
+git add runtime/lib runtime/test
 git commit -m "feat: classify xfs vmcore evidence"
 ```
 
 ### Task 2: Two-pass crash extraction
 
 **Files:**
-- Create: `vmcore-workflow/lib/xfs-crash-commands.py`
-- Modify: `vmcore-workflow/analyze-vmcore`
-- Create: `vmcore-workflow/test/test-analyze-vmcore.sh`
+- Create: `runtime/lib/xfs-crash-commands.py`
+- Modify: `runtime/analyze-vmcore`
+- Create: `runtime/tests/test-analyze-vmcore.sh`
 
 - [ ] **Step 1: Write failing shell contract**
 
@@ -81,7 +81,7 @@ Require `analyze-vmcore --help` to say `--dmesg PATH (optional)`. Require genera
 
 - [ ] **Step 2: Verify red**
 
-Run: `bash vmcore-workflow/test/test-analyze-vmcore.sh`
+Run: `bash runtime/tests/test-analyze-vmcore.sh`
 
 Expected: failure because dmesg is mandatory and two-pass extraction is absent.
 
@@ -91,24 +91,24 @@ Run baseline `crash` commands, classify the first-pass output, and generate a se
 
 - [ ] **Step 4: Verify green**
 
-Run: `bash vmcore-workflow/test/test-analyze-vmcore.sh`
+Run: `bash runtime/tests/test-analyze-vmcore.sh`
 
 Expected: `analyze-vmcore contracts passed`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add vmcore-workflow/analyze-vmcore vmcore-workflow/lib vmcore-workflow/test
+git add runtime/analyze-vmcore runtime/lib runtime/test
 git commit -m "feat: collect xfs crash evidence in two passes"
 ```
 
 ### Task 3: Skill route and XFS constraints
 
 **Files:**
-- Create: `linux-kernel-oops/references/xfs-hang.md`
-- Create: `linux-kernel-oops/agents/xfs-hang.agent.md`
-- Modify: `linux-kernel-oops/SKILL.md`
-- Modify: `linux-kernel-oops/references/flows.md`
+- Create: `skill/crash-analysis/references/xfs-hang.md`
+- Create: `skill/crash-analysis/agents/xfs-hang.agent.md`
+- Modify: `skill/crash-analysis/SKILL.md`
+- Modify: `skill/crash-analysis/references/flows.md`
 - Create: `test/xfs-skill-contract.sh`
 
 - [ ] **Step 1: Write failing contract**
@@ -134,24 +134,24 @@ Expected: both exit 0.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add linux-kernel-oops test
+git add skill/crash-analysis test
 git commit -m "feat: add xfs hang analysis flow"
 ```
 
 ### Task 4: Private image build
 
 **Files:**
-- Modify: `vmcore-workflow/joycode-kernel-oops-openeuler.Dockerfile`
-- Modify: `vmcore-workflow/joycode-entrypoint.sh`
-- Create: `vmcore-workflow/test/dockerfile-contract.sh`
+- Modify: `runtime/Dockerfile`
+- Modify: `runtime/joycode-entrypoint.sh`
+- Create: `runtime/tests/dockerfile-contract.sh`
 
 - [ ] **Step 1: Write failing Docker contract**
 
-Require `COPY linux-kernel-oops /opt/skills/linux-kernel-oops`, a copy to `/root/.joycode/skills/linux-kernel-oops`, and `COPY vmcore-workflow/analyze-vmcore`. Forbid public `git clone`.
+Require `COPY skill/crash-analysis /opt/skills/skill/crash-analysis`, a copy to `/root/.joycode/skills/skill/crash-analysis`, and `COPY runtime/analyze-vmcore`. Forbid public `git clone`.
 
 - [ ] **Step 2: Verify red**
 
-Run: `bash vmcore-workflow/test/dockerfile-contract.sh`
+Run: `bash runtime/tests/dockerfile-contract.sh`
 
 Expected: failure because the Dockerfile clones the public repository.
 
@@ -161,36 +161,36 @@ Remove cloning. Copy the private checkout skill and workflow from repository-roo
 
 - [ ] **Step 4: Verify**
 
-Run: `bash vmcore-workflow/test/dockerfile-contract.sh`
+Run: `bash runtime/tests/dockerfile-contract.sh`
 
-Run locally: `bash vmcore-workflow/test/dockerfile-contract.sh`
+Run locally: `bash runtime/tests/dockerfile-contract.sh`
 
 Run on the remote development node only:
-`docker build -f vmcore-workflow/joycode-kernel-oops-openeuler.Dockerfile -t joycode-kernel-oops:local .`
+`docker build -f runtime/Dockerfile -t joycode-kernel-oops:local .`
 
 Expected: local contract exits 0; remote image build succeeds.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add vmcore-workflow/joycode-kernel-oops-openeuler.Dockerfile vmcore-workflow/joycode-entrypoint.sh vmcore-workflow/test/dockerfile-contract.sh
+git add runtime/Dockerfile runtime/joycode-entrypoint.sh runtime/tests/dockerfile-contract.sh
 git commit -m "build: package private kernel analysis skill"
 ```
 
 ### Task 5: Jenkins execution
 
 **Files:**
-- Modify: `vmcore-workflow/Jenkinsfile`
-- Modify: `vmcore-workflow/jenkins-freestyle.sh`
-- Modify: `vmcore-workflow/test/jenkinsfile-contract.sh`
+- Modify: `runtime/Jenkinsfile`
+- Modify: `runtime/jenkins-workflow.sh`
+- Modify: `runtime/tests/jenkinsfile-contract.sh`
 
 - [ ] **Step 1: Extend the failing Jenkins contract**
 
-Require a `Build Analysis Image` stage with `docker build -f vmcore-workflow/joycode-kernel-oops-openeuler.Dockerfile`; require conditional optional-dmesg staging/mount; require read-only vmcore/debuginfo/source mounts, a writable output mount, `--focus auto|xfs|generic`, and `archiveArtifacts artifacts: 'output/**'`.
+Require a `Build Analysis Image` stage with `docker build -f runtime/Dockerfile`; require conditional optional-dmesg staging/mount; require read-only vmcore/debuginfo/source mounts, a writable output mount, `--focus auto|xfs|generic`, and `archiveArtifacts artifacts: 'output/**'`.
 
 - [ ] **Step 2: Verify red**
 
-Run: `bash vmcore-workflow/test/jenkinsfile-contract.sh`
+Run: `bash runtime/tests/jenkinsfile-contract.sh`
 
 Expected: failure because it assumes a prebuilt image and dmesg is mandatory.
 
@@ -200,24 +200,24 @@ Build from the private checkout. Make dmesg URL/path optional and omit its mount
 
 - [ ] **Step 4: Verify green**
 
-Run: `bash vmcore-workflow/test/jenkinsfile-contract.sh`
+Run: `bash runtime/tests/jenkinsfile-contract.sh`
 
-Run: `bash -n vmcore-workflow/jenkins-freestyle.sh vmcore-workflow/analyze-vmcore`
+Run: `bash -n runtime/jenkins-workflow.sh runtime/analyze-vmcore`
 
 Expected: both exit 0.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add vmcore-workflow/Jenkinsfile vmcore-workflow/jenkins-freestyle.sh vmcore-workflow/test/jenkinsfile-contract.sh
+git add runtime/Jenkinsfile runtime/jenkins-workflow.sh runtime/tests/jenkinsfile-contract.sh
 git commit -m "ci: run vmcore analysis pipeline in jenkins"
 ```
 
 ### Task 6: Fallback report and full verification
 
 **Files:**
-- Modify: `vmcore-workflow/analyze-vmcore`
-- Modify: `vmcore-workflow/test/test-analyze-vmcore.sh`
+- Modify: `runtime/analyze-vmcore`
+- Modify: `runtime/tests/test-analyze-vmcore.sh`
 - Modify: `README.md`
 
 - [ ] **Step 1: Write failing final assertion**
@@ -226,7 +226,7 @@ Require a JoyCode-disabled run to write `analysis.md` containing the verdict and
 
 - [ ] **Step 2: Verify red**
 
-Run: `bash vmcore-workflow/test/test-analyze-vmcore.sh`
+Run: `bash runtime/tests/test-analyze-vmcore.sh`
 
 Expected: failure until fallback output is wired.
 
@@ -237,10 +237,10 @@ On JoyCode disabled, timeout, or failure, write `analysis.md` from deterministic
 - [ ] **Step 4: Run all checks**
 
 ```bash
-python3 vmcore-workflow/test/test-classify-evidence.py
-bash vmcore-workflow/test/test-analyze-vmcore.sh
-bash vmcore-workflow/test/dockerfile-contract.sh
-bash vmcore-workflow/test/jenkinsfile-contract.sh
+python3 runtime/tests/test-classify-evidence.py
+bash runtime/tests/test-analyze-vmcore.sh
+bash runtime/tests/dockerfile-contract.sh
+bash runtime/tests/jenkinsfile-contract.sh
 bash test/vmcore-entry-contract.sh
 bash test/xfs-skill-contract.sh
 git diff --check origin/main...HEAD
@@ -251,7 +251,7 @@ Expected: every command exits 0.
 - [ ] **Step 5: Commit and push**
 
 ```bash
-git add README.md vmcore-workflow/analyze-vmcore vmcore-workflow/test/test-analyze-vmcore.sh
+git add README.md runtime/analyze-vmcore runtime/tests/test-analyze-vmcore.sh
 git commit -m "docs: describe automated xfs vmcore analysis"
 git push -u origin xfs-analysis-pipeline
 ```

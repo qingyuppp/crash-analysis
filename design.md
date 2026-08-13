@@ -1,4 +1,4 @@
-# Design: linux-kernel-oops
+# Design: crash-analysis
 
 This document is for contributors who want to understand how the skill is
 designed and how the pieces fit together. For installation and usage, see
@@ -9,7 +9,7 @@ designed and how the pieces fit together. For installation and usage, see
 ## Filesystem layout
 
 ```
-linux-kernel-oops/          Root of the skill
+skill/crash-analysis/    Root of the skill
 ├── SKILL.md                    Entry point; capabilities table loaded by the agent
 ├── agents/                     One agent definition file per pipeline step
 ├── references/                 Reference documents demand-loaded by agents
@@ -19,64 +19,64 @@ linux-kernel-oops/          Root of the skill
 └── evals/                      Structured eval test cases (evals.json)
 ```
 
-### [`agents/`](linux-kernel-oops/agents/)
+### [`agents/`](skill/crash-analysis/agents/)
 
 Each file defines one agent: its identity, model preference, inputs/outputs,
 and a link to the reference file that carries the detailed procedure.
 
 | File | Step | Role |
 |------|------|------|
-| [`fetcher.agent.md`](linux-kernel-oops/agents/fetcher.agent.md) | 1 | Pre-fetch vmlinux, kernel source tree, distro packages |
-| [`collector.agent.md`](linux-kernel-oops/agents/collector.agent.md) | 2 | Extract all structured data from the oops |
-| [`analyst.agent.md`](linux-kernel-oops/agents/analyst.agent.md) | 3 | Root cause analysis; propose a fix |
-| [`patcher.agent.md`](linux-kernel-oops/agents/patcher.agent.md) | 4 | Format an LKML-ready patch email |
-| [`factchecker.agent.md`](linux-kernel-oops/agents/factchecker.agent.md) | 5 | Verify source quotes, line numbers, and indentation |
-| [`patchreviewer.agent.md`](linux-kernel-oops/agents/patchreviewer.agent.md) | 6 | Gate the patch on a correctness checklist |
+| [`fetcher.agent.md`](skill/crash-analysis/agents/fetcher.agent.md) | 1 | Pre-fetch vmlinux, kernel source tree, distro packages |
+| [`collector.agent.md`](skill/crash-analysis/agents/collector.agent.md) | 2 | Extract all structured data from the oops |
+| [`analyst.agent.md`](skill/crash-analysis/agents/analyst.agent.md) | 3 | Root cause analysis; propose a fix |
+| [`patcher.agent.md`](skill/crash-analysis/agents/patcher.agent.md) | 4 | Format an LKML-ready patch email |
+| [`factchecker.agent.md`](skill/crash-analysis/agents/factchecker.agent.md) | 5 | Verify source quotes, line numbers, and indentation |
+| [`patchreviewer.agent.md`](skill/crash-analysis/agents/patchreviewer.agent.md) | 6 | Gate the patch on a correctness checklist |
 
-### [`references/`](linux-kernel-oops/references/)
+### [`references/`](skill/crash-analysis/references/)
 
 Procedure documents loaded on demand. Never loaded wholesale — agents pull in
 only what they need for the current task.
 
 | File | Purpose |
 |------|---------|
-| [`flows.md`](linux-kernel-oops/references/flows.md) | Orchestration entry point; pipeline step descriptions and todo tracking |
-| [`collection-flow.md`](linux-kernel-oops/references/collection-flow.md) | Step 2 data collection protocol |
-| [`analysis-flow.md`](linux-kernel-oops/references/analysis-flow.md) | Step 3 What/How/Where analysis protocol |
-| [`primitives.md`](linux-kernel-oops/references/primitives.md) | Low-level extraction primitives (backtrace, registers, vmlinux, …) |
-| [`fundamentals.md`](linux-kernel-oops/references/fundamentals.md) | Key Elements table, UNAME/distro detection, taint flags |
-| [`backtrace.md`](linux-kernel-oops/references/backtrace.md) | Backtrace table construction, format variants, IRQ/Task context |
-| [`mapping.md`](linux-kernel-oops/references/mapping.md) | Resolve backtrace offsets to source lines via gdb/addr2line |
-| [`reporting.md`](linux-kernel-oops/references/reporting.md) | Source code formatting rules, URL patterns, crash-site markers |
-| [`patch.md`](linux-kernel-oops/references/patch.md) | LKML patch email format (subject, tags, Cc, send script) |
-| [`decode-email.md`](linux-kernel-oops/references/decode-email.md) | Analysis reply email format |
-| [`security.md`](linux-kernel-oops/references/security.md) | CVE lookup and structured severity classification |
-| [`lockdep.md`](linux-kernel-oops/references/lockdep.md) | Parse the "N locks held" lockdep block |
-| [`semcode.md`](linux-kernel-oops/references/semcode.md) | semcode MCP server for fast kernel code and commit search |
-| [`bugtracker.md`](linux-kernel-oops/references/bugtracker.md) | Fetch oops from Launchpad, Bugzilla, Debian BTS |
-| [`image.md`](linux-kernel-oops/references/image.md) | OCR screenshot or decode drm_panic QR code |
-| [`debian.md`](linux-kernel-oops/references/debian.md) | Debian debug package download, Salsa git tree |
-| [`ubuntu.md`](linux-kernel-oops/references/ubuntu.md) | Ubuntu ddeb download, Launchpad git tree |
-| [`fedora.md`](linux-kernel-oops/references/fedora.md) | Fedora debuginfo RPM, CKI kernel-ark git tree |
-| [`fetch-debian.md`](linux-kernel-oops/references/fetch-debian.md) | Fetcher pre-fetch procedure for Debian |
-| [`fetch-ubuntu.md`](linux-kernel-oops/references/fetch-ubuntu.md) | Fetcher pre-fetch procedure for Ubuntu |
-| [`fetch-fedora.md`](linux-kernel-oops/references/fetch-fedora.md) | Fetcher pre-fetch procedure for Fedora |
+| [`flows.md`](skill/crash-analysis/references/flows.md) | Orchestration entry point; pipeline step descriptions and todo tracking |
+| [`collection-flow.md`](skill/crash-analysis/references/collection-flow.md) | Step 2 data collection protocol |
+| [`analysis-flow.md`](skill/crash-analysis/references/analysis-flow.md) | Step 3 What/How/Where analysis protocol |
+| [`primitives.md`](skill/crash-analysis/references/primitives.md) | Low-level extraction primitives (backtrace, registers, vmlinux, …) |
+| [`fundamentals.md`](skill/crash-analysis/references/fundamentals.md) | Key Elements table, UNAME/distro detection, taint flags |
+| [`backtrace.md`](skill/crash-analysis/references/backtrace.md) | Backtrace table construction, format variants, IRQ/Task context |
+| [`mapping.md`](skill/crash-analysis/references/mapping.md) | Resolve backtrace offsets to source lines via gdb/addr2line |
+| [`reporting.md`](skill/crash-analysis/references/reporting.md) | Source code formatting rules, URL patterns, crash-site markers |
+| [`patch.md`](skill/crash-analysis/references/patch.md) | LKML patch email format (subject, tags, Cc, send script) |
+| [`decode-email.md`](skill/crash-analysis/references/decode-email.md) | Analysis reply email format |
+| [`security.md`](skill/crash-analysis/references/security.md) | CVE lookup and structured severity classification |
+| [`lockdep.md`](skill/crash-analysis/references/lockdep.md) | Parse the "N locks held" lockdep block |
+| [`semcode.md`](skill/crash-analysis/references/semcode.md) | semcode MCP server for fast kernel code and commit search |
+| [`bugtracker.md`](skill/crash-analysis/references/bugtracker.md) | Fetch oops from Launchpad, Bugzilla, Debian BTS |
+| [`image.md`](skill/crash-analysis/references/image.md) | OCR screenshot or decode drm_panic QR code |
+| [`debian.md`](skill/crash-analysis/references/debian.md) | Debian debug package download, Salsa git tree |
+| [`ubuntu.md`](skill/crash-analysis/references/ubuntu.md) | Ubuntu ddeb download, Launchpad git tree |
+| [`fedora.md`](skill/crash-analysis/references/fedora.md) | Fedora debuginfo RPM, CKI kernel-ark git tree |
+| [`fetch-debian.md`](skill/crash-analysis/references/fetch-debian.md) | Fetcher pre-fetch procedure for Debian |
+| [`fetch-ubuntu.md`](skill/crash-analysis/references/fetch-ubuntu.md) | Fetcher pre-fetch procedure for Ubuntu |
+| [`fetch-fedora.md`](skill/crash-analysis/references/fetch-fedora.md) | Fetcher pre-fetch procedure for Fedora |
 
-### [`scripts/`](linux-kernel-oops/scripts/)
-
-| File | Purpose |
-|------|---------|
-| [`backtrace_resolve.py`](linux-kernel-oops/scripts/backtrace_resolve.py) | Resolve backtrace offsets to source lines; outputs `backtrace.json` |
-| [`parse_oops.py`](linux-kernel-oops/scripts/parse_oops.py) | Structured extraction of key fields from raw oops text |
-| [`decode_panic_qr.py`](linux-kernel-oops/scripts/decode_panic_qr.py) | Decode a drm_panic QR code from an image file |
-
-### [`templates/`](linux-kernel-oops/templates/)
+### [`scripts/`](skill/crash-analysis/scripts/)
 
 | File | Purpose |
 |------|---------|
-| [`basic-report.md`](linux-kernel-oops/templates/basic-report.md) | Output report skeleton |
-| [`patch-email-template.md`](linux-kernel-oops/templates/patch-email-template.md) | Patch email skeleton |
-| [`decode-email-template.md`](linux-kernel-oops/templates/decode-email-template.md) | Analysis reply email skeleton |
+| [`backtrace_resolve.py`](skill/crash-analysis/scripts/backtrace_resolve.py) | Resolve backtrace offsets to source lines; outputs `backtrace.json` |
+| [`parse_oops.py`](skill/crash-analysis/scripts/parse_oops.py) | Structured extraction of key fields from raw oops text |
+| [`decode_panic_qr.py`](skill/crash-analysis/scripts/decode_panic_qr.py) | Decode a drm_panic QR code from an image file |
+
+### [`templates/`](skill/crash-analysis/templates/)
+
+| File | Purpose |
+|------|---------|
+| [`basic-report.md`](skill/crash-analysis/templates/basic-report.md) | Output report skeleton |
+| [`patch-email-template.md`](skill/crash-analysis/templates/patch-email-template.md) | Patch email skeleton |
+| [`decode-email-template.md`](skill/crash-analysis/templates/decode-email-template.md) | Analysis reply email skeleton |
 
 ---
 
@@ -98,7 +98,7 @@ Step 5: Fact-check ─┤ ──►  factcheck.md   report.md (fixes)
 Step 6: Reviewer  ─┘ ──►  report.md (verdict)   [deletes send script on BLOCK]
 ```
 
-The orchestrator follows [`references/flows.md`](linux-kernel-oops/references/flows.md)
+The orchestrator follows [`references/flows.md`](skill/crash-analysis/references/flows.md)
 to launch and sequence agents, track a todo list, and regenerate `report.html`
 after all steps complete.
 
@@ -109,12 +109,12 @@ after all steps complete.
 **Goal:** prepare everything the later steps will need before they start, so
 they don't waste their time budget on network I/O.
 
-**Agent:** [`agents/fetcher.agent.md`](linux-kernel-oops/agents/fetcher.agent.md)  
+**Agent:** [`agents/fetcher.agent.md`](skill/crash-analysis/agents/fetcher.agent.md)
 **Model:** small/fast  
 **Procedure:** agent file is self-contained; per-distro pre-fetch procedures
-are in [`fetch-ubuntu.md`](linux-kernel-oops/references/fetch-ubuntu.md),
-[`fetch-debian.md`](linux-kernel-oops/references/fetch-debian.md),
-[`fetch-fedora.md`](linux-kernel-oops/references/fetch-fedora.md)
+are in [`fetch-ubuntu.md`](skill/crash-analysis/references/fetch-ubuntu.md),
+[`fetch-debian.md`](skill/crash-analysis/references/fetch-debian.md),
+[`fetch-fedora.md`](skill/crash-analysis/references/fetch-fedora.md)
 
 The fetcher handles:
 - Downloading and decompressing the syzbot `vmlinux` (can be 1–2 GB)
@@ -132,15 +132,15 @@ prepared and which paths were set (vmlinux location, SOURCEDIR, PATCH_BASE).
 
 **Goal:** extract all structured data from the oops. No analysis.
 
-**Agent:** [`agents/collector.agent.md`](linux-kernel-oops/agents/collector.agent.md)  
+**Agent:** [`agents/collector.agent.md`](skill/crash-analysis/agents/collector.agent.md)
 **Model:** standard  
-**Procedure:** [`references/collection-flow.md`](linux-kernel-oops/references/collection-flow.md)
+**Procedure:** [`references/collection-flow.md`](skill/crash-analysis/references/collection-flow.md)
 
 The collector reads `prefetch.md` then works through a fixed extraction
-checklist from [`references/primitives.md`](linux-kernel-oops/references/primitives.md):
+checklist from [`references/primitives.md`](skill/crash-analysis/references/primitives.md):
 classifying the crash type, building the Key Elements table, extracting the
 backtrace, resolving offsets to source lines via
-[`backtrace_resolve.py`](linux-kernel-oops/scripts/backtrace_resolve.py),
+[`backtrace_resolve.py`](skill/crash-analysis/scripts/backtrace_resolve.py),
 and reporting source code listings for the top backtrace frames.
 
 Key rules:
@@ -156,9 +156,9 @@ Key rules:
 
 **Goal:** determine root cause and, where confidence is high, propose a fix.
 
-**Agent:** [`agents/analyst.agent.md`](linux-kernel-oops/agents/analyst.agent.md)  
+**Agent:** [`agents/analyst.agent.md`](skill/crash-analysis/agents/analyst.agent.md)
 **Model:** standard  
-**Procedure:** [`references/analysis-flow.md`](linux-kernel-oops/references/analysis-flow.md)
+**Procedure:** [`references/analysis-flow.md`](skill/crash-analysis/references/analysis-flow.md)
 
 The analyst reads the collector's `report.md` and follows the
 **What / How / Where** protocol:
@@ -183,10 +183,10 @@ original lore.kernel.org thread.
 
 **Goal:** turn `report.patch` into a properly formatted LKML patch email.
 
-**Agent:** [`agents/patcher.agent.md`](linux-kernel-oops/agents/patcher.agent.md)  
+**Agent:** [`agents/patcher.agent.md`](skill/crash-analysis/agents/patcher.agent.md)
 **Model:** standard  
 **Conditional:** only runs if `report.patch` exists  
-**Procedure:** [`references/patch.md`](linux-kernel-oops/references/patch.md)
+**Procedure:** [`references/patch.md`](skill/crash-analysis/references/patch.md)
 
 The patcher applies the patch with `git apply`, formats the commit message,
 fills in all required tags (`Reported-by`, `Fixes:`, `Link:`,
@@ -202,7 +202,7 @@ fills in all required tags (`Reported-by`, `Fixes:`, `Link:`,
 **Goal:** verify that all source code quotes and metadata in `report.md` are
 accurate.
 
-**Agent:** [`agents/factchecker.agent.md`](linux-kernel-oops/agents/factchecker.agent.md)  
+**Agent:** [`agents/factchecker.agent.md`](skill/crash-analysis/agents/factchecker.agent.md)
 **Model:** small/fast — the task is mechanical  
 **Runs in parallel with:** Step 4
 
@@ -221,7 +221,7 @@ with fixes applied.
 
 **Goal:** binary PASS/BLOCK gate on the patch before it could be sent to LKML.
 
-**Agent:** [`agents/patchreviewer.agent.md`](linux-kernel-oops/agents/patchreviewer.agent.md)  
+**Agent:** [`agents/patchreviewer.agent.md`](skill/crash-analysis/agents/patchreviewer.agent.md)
 **Model:** small/fast  
 **Conditional:** only runs if Step 4 produced `patch-email.txt`  
 **Runs after:** Step 4
@@ -247,10 +247,10 @@ A few guidelines:
 - **Agent files describe identity and scope; reference files describe
   procedure.** Put detailed step-by-step instructions in a reference file and
   link to it from the agent file.
-- **Primitives vs flows.** A *primitive* (in [`primitives.md`](linux-kernel-oops/references/primitives.md))
+- **Primitives vs flows.** A *primitive* (in [`primitives.md`](skill/crash-analysis/references/primitives.md))
   is a self-contained extraction task — it takes raw input and produces
   structured data with no conclusions. A *flow* (in
-  [`flows.md`](linux-kernel-oops/references/flows.md) or a dedicated
+  [`flows.md`](skill/crash-analysis/references/flows.md) or a dedicated
   `*-flow.md`) orchestrates primitives and/or other flows toward a
   higher-level goal and may draw conclusions or produce output files. Flows
   can be used standalone or embedded inside an agent's procedure. Keep the

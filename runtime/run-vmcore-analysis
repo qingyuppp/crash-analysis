@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+run_jc=1
+if [[ ${1:-} == --no-jc ]]; then run_jc=0; shift; fi
+[[ $# -eq 0 ]] || { echo "unknown argument: $1" >&2; exit 2; }
+command -v cra >/dev/null || { echo 'CrashAnalysis CLI is unavailable' >&2; exit 1; }
+
+collect_args=(
+  vmcore collect
+  --vmcore /data/input/vmcore
+  --debuginfo /data/input/debuginfo.rpm
+  --kernel /data/input/kernel
+  --output-dir /data/output
+)
+[[ ! -r /data/input/dmesg ]] || collect_args+=(--dmesg /data/input/dmesg)
+
+echo '==> collecting vmcore evidence'
+cra "${collect_args[@]}"
+echo '==> classifying vmcore evidence'
+cra vmcore classify --collection /data/output/collection.json
+[[ $run_jc -eq 0 ]] && exit 0
+command -v jc >/dev/null || { echo 'JoyCode CLI is unavailable' >&2; exit 1; }
+echo '==> starting JoyCode skill analysis'
+jc exec --json --channel custom --model "${JOYCODE_MODEL:-GLM-5.2}" --sandbox danger-full-access --skip-git-repo-check 'Use $crash-analysis. Read /data/output/evidence.json, then only the matching /data/output/focus/*.txt. Route automatically. For xfs_hang, use cra vmcore diagnose compact-bt --evidence /data/output/evidence.json --pids <route candidate PIDs> before selecting representatives; then use cra vmcore diagnose task for bt -f, cra vmcore diagnose query for additional crash commands, and cra vmcore diagnose structure or cra vmcore diagnose symbol when object or symbol evidence is needed. Read each action result.json and queries.log. Do not read crash-raw.txt unless a focused query cannot resolve uncertainty. Write /data/output/analysis.md in Simplified Chinese; preserve kernel symbols, commands, addresses, and identifiers verbatim.'

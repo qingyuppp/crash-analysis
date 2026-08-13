@@ -1,9 +1,25 @@
-# Linux Kernel OOPS Analysis — AI Agent Skill
+# Crash Analysis
 
-An AI agent **skill** for expert analysis of Linux kernel OOPS crash reports
-on x86. The skill gives an agent a structured, multi-step workflow for
-extracting structured data from a crash report and reasoning toward a root
-cause hypothesis.
+An AI-assisted Linux kernel crash analysis repository. It provides one
+installable analysis skill, a local `cra` CLI for vmcore evidence collection
+and diagnosis, and a Docker/Jenkins runtime for reproducible crash analysis.
+
+The repository is intentionally split into three parts:
+
+| Directory | Purpose |
+|-----------|---------|
+| `cli/` | Python package and `cra` command (`collect`, `classify`, `diagnose`) |
+| `skill/crash-analysis/` | Installable JoyCode/agent skill and its references, agents, scripts, and templates |
+| `runtime/` | Docker image, Jenkins Freestyle script, and container entrypoints |
+
+The normal flow is:
+
+```text
+Jenkins or shell inputs → Docker runtime → cra vmcore collect/classify
+                         → JoyCode uses $crash-analysis → analysis.md
+```
+
+The same repository supports local CLI development and containerized analysis.
 
 ## Examples
 
@@ -11,7 +27,7 @@ Real-world crash reports analysed end-to-end by the skill:
 
 | Oops report | Analysis | Description |
 |-------------|----------|-------------|
-| [fedora-oops.txt](linux-kernel-oops/assets/fedora-oops.txt) | [example-1.md](docs/example-1.md) | Fedora 43, ZhiWei NA08H tablet — `bmc150_accel_core` NULL pointer dereference on interrupt-less hardware; upstream fix in v6.18 |
+| [fedora-oops.txt](skill/crash-analysis/assets/fedora-oops.txt) | [example-1.md](docs/example-1.md) | Fedora 43, ZhiWei NA08H tablet — `bmc150_accel_core` NULL pointer dereference on interrupt-less hardware; upstream fix in v6.18 |
 | [Launchpad #2134472](https://bugs.launchpad.net/ubuntu/+bug/2134472) | [example-2.md](docs/example-2.md) | Ubuntu 24.04 Noble, GCP — `l3mdev_fib_table_rcu` NULL dereference during VRF teardown; race with ARP neighbour timer in IRQ context |
 | [lkml msgid aYN3JC_Kdgw5G2Ik@861G6M3](https://lore.kernel.org/lkml/aYN3JC_Kdgw5G2Ik@861G6M3/) | [example-3.md](docs/example-3.md) | Cloudflare Linux 6.18.7 — `VM_BUG_ON_FOLIO` in `filemap_fault`; THP folio split race placing sub-folios at wrong XArray indices; fix in v7.0-rc1, not yet in v6.18 stable |
 | [bugzilla.kernel.org #221376](https://bugzilla.kernel.org/show_bug.cgi?id=221376) | [example-4.md](docs/example-4.md) | Custom 6.18.22 kernel, AMD RX 9070 XT (RDNA4/GFX12) — `DRM_MM_BUG_ON` in `drm_mm_init`; RDNA4 removed GDS/GWS/OA resources but `amdgpu_ttm_init` unconditionally passes zero-size ranges; no upstream fix found as of v6.19 |
@@ -51,18 +67,41 @@ Once installed, you can talk to the agent naturally. A few examples:
 
 ---
 
-## Contents
+## Quick start
 
-| Directory | Purpose |
-|-----------|---------|
-| `linux-kernel-oops/` | The installable skill |
-| `linux-kernel-oops/references/` | Primitives and analysis flows (demand-loaded) |
-| `linux-kernel-oops/assets/` | Example and real-world OOPS reports for testing |
-| `linux-kernel-oops/evals/` | Evaluation test cases |
+Install the CLI in editable mode for local development:
+
+```bash
+python3 -m pip install -e ./cli
+cra --help
+```
+
+Build the analysis image from the repository root:
+
+```bash
+docker build -f runtime/Dockerfile -t crash-analysis:latest .
+```
+
+For Jenkins Freestyle, copy `runtime/jenkins-workflow.sh` into an Execute
+shell step and provide vmcore, debuginfo, and kernel-source URL or PATH
+parameters. The script mounts those inputs read-only and archives
+`$WORKSPACE/output`.
+
+The CLI can also be run in the image directly:
+
+```bash
+cra vmcore collect --vmcore /data/input/vmcore \
+  --debuginfo /data/input/debuginfo.rpm \
+  --kernel /data/input/kernel --output-dir /data/output
+cra vmcore classify --collection /data/output/collection.json
+```
+
+The skill's detailed references, sample reports, and evaluation cases live
+under `skill/crash-analysis/`.
 
 ---
 
-## Skill: `linux-kernel-oops`
+## Skill: `crash-analysis`
 
 **Expert analysis of Linux Kernel OOPS crash reports on x86.**
 
@@ -109,21 +148,21 @@ The easiest way to install across any supported agent. Requires
 
 ```bash
 # Install for all agents (user-level)
-gh skill install intel/linux-kernel-oops linux-kernel-oops
+ gh skill install intel/crash-analysis skill/crash-analysis
 
 # Install for a specific agent only
-gh skill install intel/linux-kernel-oops linux-kernel-oops \
+ gh skill install intel/crash-analysis skill/crash-analysis \
     --agent copilot --scope user
 
 # Pin to a specific release tag for reproducibility
-gh skill install intel/linux-kernel-oops linux-kernel-oops \
+gh skill install intel/crash-analysis skill/crash-analysis \
     --pin v1.0.0
 ```
 
 Keep it up to date:
 
 ```bash
-gh skill update linux-kernel-oops
+ gh skill update crash-analysis
 ```
 
 ### GitHub Copilot CLI
@@ -131,7 +170,7 @@ gh skill update linux-kernel-oops
 Skills are installed per-user under `~/.copilot/skills/`:
 
 ```bash
-cp -r linux-kernel-oops ~/.copilot/skills/
+cp -r skill/crash-analysis ~/.copilot/skills/
 ```
 
 ### GitHub Copilot in VS Code
@@ -143,10 +182,10 @@ committed so the whole team benefits automatically:
 ```bash
 # Project-level (commit to your repository)
 mkdir -p .github/skills
-cp -r linux-kernel-oops .github/skills/
+cp -r skill/crash-analysis .github/skills/
 
 # User-level (available in every project)
-cp -r linux-kernel-oops ~/.copilot/skills/
+cp -r skill/crash-analysis ~/.copilot/skills/
 ```
 
 VS Code also scans `.claude/skills/` and `.agents/skills/`, so a single
@@ -161,10 +200,10 @@ Claude Code discovers skills in `.claude/skills/` (project) or
 ```bash
 # Project-level
 mkdir -p .claude/skills
-cp -r linux-kernel-oops .claude/skills/
+cp -r skill/crash-analysis .claude/skills/
 
 # User-level
-cp -r linux-kernel-oops ~/.claude/skills/
+cp -r skill/crash-analysis ~/.claude/skills/
 ```
 
 ### OpenAI Codex
@@ -175,10 +214,10 @@ Codex reads skills from `.agents/skills/` at project level and from
 ```bash
 # Project-level
 mkdir -p .agents/skills
-cp -r linux-kernel-oops .agents/skills/
+cp -r skill/crash-analysis .agents/skills/
 
 # User-level
-cp -r linux-kernel-oops ~/.agents/skills/
+cp -r skill/crash-analysis ~/.agents/skills/
 ```
 
 ### Gemini CLI
@@ -187,7 +226,7 @@ Gemini CLI reads project skills from `.gemini/skills/`:
 
 ```bash
 mkdir -p .gemini/skills
-cp -r linux-kernel-oops .gemini/skills/
+cp -r skill/crash-analysis .gemini/skills/
 ```
 
 ### OpenCode
@@ -196,7 +235,7 @@ OpenCode has native skill support and reads skills from `.opencode/skills/`:
 
 ```bash
 mkdir -p .opencode/skills
-cp -r linux-kernel-oops .opencode/skills/
+cp -r skill/crash-analysis .opencode/skills/
 ```
 
 For user-level installation, copy to `~/.config/opencode/skills/` instead.

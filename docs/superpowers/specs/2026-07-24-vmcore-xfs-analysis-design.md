@@ -3,7 +3,7 @@
 ## Goal
 
 Build a Jenkins-run container workflow that mounts kernel incident artefacts,
-executes the `linux-kernel-oops` skill as a staged analysis pipeline, and
+executes the `skill/crash-analysis` skill as a staged analysis pipeline, and
 produces an auditable report.  XFS hang analysis is a classified branch of
 that pipeline, not a separate top-level tool.
 
@@ -14,7 +14,7 @@ an optional dmesg text file.  It must never supply the raw vmcore to JoyCode
 or another LLM.  `crash` is the only component that reads the vmcore.
 
 The first implementation targets the AGF-versus-inode-cluster-buffer ABBA
-deadlock described in `linux-kernel-oops/utils/人工分析.md`.  It reports a
+deadlock described in `skill/crash-analysis/utils/人工分析.md`.  It reports a
 confirmed cycle only when the collected evidence identifies both wait edges
 and identifies the buffer types.  It must distinguish a confirmed cycle from
 XFS suspicion and from insufficient evidence; it must not infer a holder from
@@ -45,7 +45,7 @@ It then passes only derived text files to the skill.  JoyCode receives the
 skill installed inside the image, the normalized evidence, and the mounted
 read-only source tree.
 
-The image copies this repository's `linux-kernel-oops` directory at build
+The image copies this repository's `skill/crash-analysis` directory at build
 time.  It must not clone the public upstream skill during image construction;
 otherwise the image can silently omit private XFS functionality.
 

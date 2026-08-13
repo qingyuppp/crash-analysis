@@ -13,9 +13,9 @@
 ### Task 1: Define the compact evidence contract
 
 **Files:**
-- Modify: `vmcore-workflow/test/analyze-vmcore-contract.sh`
-- Modify: `vmcore-workflow/test/test-task-routing.py`
-- Modify: `vmcore-workflow/lib/classify_evidence.py`
+- Modify: `runtime/tests/analyze-vmcore-contract.sh`
+- Modify: `runtime/tests/test-task-routing.py`
+- Modify: `runtime/lib/classify_evidence.py`
 
 - [ ] **Step 1: Make the contract test require the compact files and forbid removed automation**
 
@@ -23,7 +23,7 @@ Require `evidence.json`, `focus/xfs.txt`, `focus/fault.txt`, `focus/hang.txt`, a
 
 - [ ] **Step 2: Run the contract test and confirm it fails**
 
-Run: `bash vmcore-workflow/test/analyze-vmcore-contract.sh`
+Run: `bash runtime/tests/analyze-vmcore-contract.sh`
 
 Expected: failure because the current script still contains XFS second-pass and JoyCode logic.
 
@@ -33,16 +33,16 @@ Make the classifier emit task and route data consumable by `analyze-vmcore`; mak
 
 - [ ] **Step 4: Re-run the focused tests**
 
-Run: `bash vmcore-workflow/test/analyze-vmcore-contract.sh && python3 vmcore-workflow/test/test-task-routing.py`
+Run: `bash runtime/tests/analyze-vmcore-contract.sh && python3 runtime/tests/test-task-routing.py`
 
 Expected: both pass.
 
 ### Task 2: Add iterative crash queries
 
 **Files:**
-- Create: `vmcore-workflow/crash-query`
-- Modify: `vmcore-workflow/joycode-kernel-oops-openeuler.Dockerfile`
-- Create: `vmcore-workflow/test/crash-query-contract.sh`
+- Create: `runtime/crash-query`
+- Modify: `runtime/Dockerfile`
+- Create: `runtime/tests/crash-query-contract.sh`
 
 - [ ] **Step 1: Write a contract test for query logging**
 
@@ -50,7 +50,7 @@ Require the helper to accept vmcore and vmlinux paths plus a crash command, invo
 
 - [ ] **Step 2: Run the test and confirm it fails**
 
-Run: `bash vmcore-workflow/test/crash-query-contract.sh`
+Run: `bash runtime/tests/crash-query-contract.sh`
 
 Expected: failure because `crash-query` does not exist.
 
@@ -60,17 +60,17 @@ Implement a Bash wrapper that validates readable artifact paths and a non-empty 
 
 - [ ] **Step 4: Re-run the query and Docker contract tests**
 
-Run: `bash vmcore-workflow/test/crash-query-contract.sh && bash vmcore-workflow/test/dockerfile-contract.sh`
+Run: `bash runtime/tests/crash-query-contract.sh && bash runtime/tests/dockerfile-contract.sh`
 
 Expected: both pass.
 
 ### Task 3: Preserve Jenkins orchestration while removing manual focus selection
 
 **Files:**
-- Modify: `vmcore-workflow/Jenkinsfile`
-- Modify: `vmcore-workflow/jenkins-freestyle.sh`
-- Modify: `vmcore-workflow/test/jenkinsfile-contract.sh`
-- Modify: `vmcore-workflow/test/freestyle-contract.sh`
+- Modify: `runtime/Jenkinsfile`
+- Modify: `runtime/jenkins-workflow.sh`
+- Modify: `runtime/tests/jenkinsfile-contract.sh`
+- Modify: `runtime/tests/freestyle-contract.sh`
 
 - [ ] **Step 1: Update Jenkins contract tests**
 
@@ -78,7 +78,7 @@ Require `RUN_JOYCODE` and credential injection to remain, require automatic evid
 
 - [ ] **Step 2: Run the tests and confirm they fail**
 
-Run: `bash vmcore-workflow/test/jenkinsfile-contract.sh && bash vmcore-workflow/test/freestyle-contract.sh`
+Run: `bash runtime/tests/jenkinsfile-contract.sh && bash runtime/tests/freestyle-contract.sh`
 
 Expected: failure because both launchers still expose `FOCUS`.
 
@@ -88,19 +88,19 @@ Remove manual focus selection, retain the evidence-only `RUN_JOYCODE=false` mode
 
 - [ ] **Step 4: Re-run the launcher tests**
 
-Run: `bash vmcore-workflow/test/jenkinsfile-contract.sh && bash vmcore-workflow/test/freestyle-contract.sh`
+Run: `bash runtime/tests/jenkinsfile-contract.sh && bash runtime/tests/freestyle-contract.sh`
 
 Expected: both pass.
 
 ### Task 4: Route the packaged skill through compact evidence
 
 **Files:**
-- Modify: `linux-kernel-oops/SKILL.md`
-- Modify: `linux-kernel-oops/references/flows.md`
-- Modify: `linux-kernel-oops/references/vmcore-evidence.md`
-- Modify: `linux-kernel-oops/references/xfs-hang.md`
-- Modify: `linux-kernel-oops/agents/vmcore-evidence.agent.md`
-- Modify: `linux-kernel-oops/agents/xfs-hang.agent.md`
+- Modify: `skill/crash-analysis/SKILL.md`
+- Modify: `skill/crash-analysis/references/flows.md`
+- Modify: `skill/crash-analysis/references/vmcore-evidence.md`
+- Modify: `skill/crash-analysis/references/xfs-hang.md`
+- Modify: `skill/crash-analysis/agents/vmcore-evidence.agent.md`
+- Modify: `skill/crash-analysis/agents/xfs-hang.agent.md`
 
 - [ ] **Step 1: Update the evidence contract and routing instructions**
 
@@ -112,33 +112,33 @@ Document that the skill invokes `crash-query` for arbitrary PIDs and objects, re
 
 - [ ] **Step 3: Verify internal references and stale terminology**
 
-Run: `rg -n 'future XFS|joycode-prompt|xfs-buffer-summary|xfs-lock-graph|--focus' linux-kernel-oops vmcore-workflow`
+Run: `rg -n 'future XFS|joycode-prompt|xfs-buffer-summary|xfs-lock-graph|--focus' skill/crash-analysis runtime`
 
 Expected: no stale references except intentional historical tests removed during implementation.
 
 ### Task 5: Remove superseded automatic XFS inference and verify the full suite
 
 **Files:**
-- Delete: `vmcore-workflow/lib/xfs_buffer_evidence.py`
-- Delete: `vmcore-workflow/test/test-xfs-buffer-evidence.py`
-- Delete: `vmcore-workflow/test/test-xfs-lock-graph.py`
-- Delete: `vmcore-workflow/test/fixtures/xfs-confirmed-crash.txt`
-- Delete: `vmcore-workflow/test/fixtures/xfs-suspected-crash.txt`
+- Delete: `runtime/lib/xfs_buffer_evidence.py`
+- Delete: `runtime/tests/test-xfs-buffer-evidence.py`
+- Delete: `runtime/tests/test-xfs-lock-graph.py`
+- Delete: `runtime/tests/fixtures/xfs-confirmed-crash.txt`
+- Delete: `runtime/tests/fixtures/xfs-suspected-crash.txt`
 
 - [ ] **Step 1: Remove files only after callers and tests no longer reference them**
 
-Run: `rg -n 'xfs_buffer_evidence|xfs-buffer-summary|xfs-lock-graph|xfs-confirmed-crash|xfs-suspected-crash' vmcore-workflow`
+Run: `rg -n 'xfs_buffer_evidence|xfs-buffer-summary|xfs-lock-graph|xfs-confirmed-crash|xfs-suspected-crash' runtime`
 
 Expected: no production caller remains before deletion.
 
 - [ ] **Step 2: Run all workflow tests**
 
-Run: `for test in vmcore-workflow/test/*.sh; do bash "$test"; done && python3 vmcore-workflow/test/test-task-routing.py`
+Run: `for test in runtime/tests/*.sh; do bash "$test"; done && python3 runtime/tests/test-task-routing.py`
 
 Expected: every command exits zero.
 
 - [ ] **Step 3: Inspect the final diff**
 
-Run: `git diff --check && git diff -- vmcore-workflow linux-kernel-oops`
+Run: `git diff --check && git diff -- runtime skill/crash-analysis`
 
 Expected: no whitespace errors; `.gitignore` and `docs/analysis-flow.drawio` remain untouched.
