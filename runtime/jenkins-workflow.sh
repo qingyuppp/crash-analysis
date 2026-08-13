@@ -29,13 +29,15 @@ set -o errexit
 set -o nounset
 
 IMAGE_NAME='crash-analysis:latest'
-REPO_ROOT="${WORKSPACE:-$(pwd)}"
-STAGE_ROOT="${STAGE_ROOT:-/work/pqy/crash-analysis}"
+JENKINS_WORKSPACE="${WORKSPACE:-$(pwd)}"
+REPO_ROOT="${REPO_ROOT:-/work/pqy/crash-analysis}"
+BUILD_IMAGE="${BUILD_IMAGE:-false}"
+STAGE_ROOT="${STAGE_ROOT:-/work/pqy/crash-analysis-runtime}"
 VMCORE_TARGET="$STAGE_ROOT/crash/vmcore"
 DMESG_TARGET="$STAGE_ROOT/crash/vmcore-dmesg.txt"
 DEBUG_RPM_TARGET="$STAGE_ROOT/debug/kernel-debuginfo.rpm"
 KERNEL_TARGET="$STAGE_ROOT/kernel/vanguard"
-OUTPUT_DIR="$WORKSPACE/output"
+OUTPUT_DIR="$JENKINS_WORKSPACE/output"
 
 fix_output_ownership() {
     local status=$?
@@ -114,10 +116,23 @@ echo "===== Preflight ====="
 whoami
 id
 sudo docker ps >/dev/null
-echo "==> Building $IMAGE_NAME from $REPO_ROOT"
-sudo docker build -f "$REPO_ROOT/runtime/Dockerfile" -t "$IMAGE_NAME" "$REPO_ROOT"
-rm -rf "$OUTPUT_DIR"
+if [ "$BUILD_IMAGE" = "true" ]; then
+    echo "==> Building $IMAGE_NAME from $REPO_ROOT"
+    sudo docker build -f "$REPO_ROOT/runtime/Dockerfile" -t "$IMAGE_NAME" "$REPO_ROOT"
+else
+    echo "==> Skipping image build (BUILD_IMAGE=$BUILD_IMAGE)"
+    sudo docker image inspect "$IMAGE_NAME" >/dev/null || {
+        echo "Required image is unavailable: $IMAGE_NAME" >&2
+        exit 2
+    }
+fi
+if [ -e "$OUTPUT_DIR" ]; then
+    sudo chown -R "$(id -u):$(id -g)" "$OUTPUT_DIR"
+    rm -rf "$OUTPUT_DIR"
+fi
 mkdir -p "$OUTPUT_DIR"
+sudo mkdir -p "$STAGE_ROOT"
+sudo chown -R "$(id -u):$(id -g)" "$STAGE_ROOT"
 
 echo "===== Materialize inputs ====="
 materialize_file  VMCORE     "${VMCORE_URL:-}"     "${VMCORE_PATH:-}"     "$VMCORE_TARGET"

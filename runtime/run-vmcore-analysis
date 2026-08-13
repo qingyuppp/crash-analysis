@@ -22,3 +22,9 @@ cra vmcore classify --collection /data/output/collection.json
 command -v jc >/dev/null || { echo 'JoyCode CLI is unavailable' >&2; exit 1; }
 echo '==> starting JoyCode skill analysis'
 jc exec --json --channel custom --model "${JOYCODE_MODEL:-GLM-5.2}" --sandbox danger-full-access --skip-git-repo-check 'Use $crash-analysis. Read /data/output/evidence.json, then only the matching /data/output/focus/*.txt. Route automatically. For xfs_hang, use cra vmcore diagnose compact-bt --evidence /data/output/evidence.json --pids <route candidate PIDs> before selecting representatives; then use cra vmcore diagnose task for bt -f, cra vmcore diagnose query for additional crash commands, and cra vmcore diagnose structure or cra vmcore diagnose symbol when object or symbol evidence is needed. Read each action result.json and queries.log. Do not read crash-raw.txt unless a focused query cannot resolve uncertainty. Write /data/output/analysis.md in Simplified Chinese; preserve kernel symbols, commands, addresses, and identifiers verbatim.'
+
+analysis_file=/data/output/analysis.md
+if [[ ! -s "$analysis_file" ]] || grep -Fq -- 'Evidence was collected. Use the matching analysis skill' "$analysis_file"; then
+  echo 'JoyCode analysis did not complete: analysis.md is missing or still a collection placeholder' >&2
+  exit 1
+fi
