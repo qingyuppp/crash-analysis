@@ -1,301 +1,200 @@
 # Crash Analysis
 
-An AI-assisted Linux kernel crash analysis repository. It provides one
-installable analysis skill, a local `cra` CLI for vmcore evidence collection
-and diagnosis, and a Docker/Jenkins runtime for reproducible crash analysis.
+Crash Analysis 是一个面向 Linux 内核崩溃现场的 AI 辅助分析工具。它将可复现的
+`vmcore` 证据采集与 Agent 推理分开：`cra` 负责执行和记录 `crash` 查询，
+`crash-analysis` Skill 负责基于这些证据生成根因分析报告。
 
-The repository is intentionally split into three parts:
+仓库分为三个部分：
 
-| Directory | Purpose |
-|-----------|---------|
-| `cli/` | Python package and `cra` command (`collect`, `classify`, `diagnose`) |
-| `skill/crash-analysis/` | Installable JoyCode/agent skill and its references, agents, scripts, and templates |
-| `runtime/` | Docker image, Jenkins Freestyle script, and container entrypoints |
+| 目录 | 职责 |
+|---|---|
+| `cli/` | Python 包和 `cra` 命令：vmcore 采集、分类、诊断动作与 Skill 安装。 |
+| `skill/crash-analysis/` | JoyCode/Agent Skill，以及分析流程、参考资料、Agent、脚本和报告模板。 |
+| `runtime/` | Docker 镜像、容器入口与 Jenkins Freestyle 执行脚本。 |
 
-The normal flow is:
+## 工作流程
 
 ```text
-Jenkins or shell inputs → Docker runtime → cra vmcore collect/classify
-                         → JoyCode uses $crash-analysis → analysis.md
+vmcore + 匹配的 debuginfo + 内核源码 + 可选 dmesg
+                         │
+                         ▼
+              Docker 运行环境 / cra
+                         │
+          collect → classify → evidence.json
+                         │
+                         ▼
+      JoyCode 使用 $crash-analysis Skill 分析
+                         │
+                         ▼
+analysis.md + actions/ + queries.log（可追溯证据）
 ```
 
-The same repository supports local CLI development and containerized analysis.
+`cra` 先生成确定性证据和候选路由；LLM 只在此基础上执行必要的补充查询并撰写
+`analysis.md`。不要把原始 vmcore 直接交给 LLM。
 
 ## Examples
 
-Real-world crash reports analysed end-to-end by the skill:
+| 案例 | 分析报告 | 描述 |
+|---|---|---|
+| XFS hang / filesystem deadlock | [analysis1.md](docs/examples/analysis1.md) | 通过 vmcore、`compact-bt`、`task`、`query` 和结构化 buffer 证据，确认 `/dev/vdb2` 上 AGF 与 inode-cluster buffer 之间的 ABBA 死锁。流程见 [xfs-hang.md](skill/crash-analysis/references/xfs-hang.md)。 |
+| NFS readdir 非法释放 Oops | [analysis2.md](docs/examples/analysis2.md) | 在 `kswapd0` 回收路径中，`nfs_readdir_clear_array()` 向 `kfree()` 传入非法值并触发 kernel paging request。流程见 [flows.md](skill/crash-analysis/references/flows.md)。 |
 
-| Oops report | Analysis | Description |
-|-------------|----------|-------------|
-| [fedora-oops.txt](skill/crash-analysis/assets/fedora-oops.txt) | [example-1.md](docs/example-1.md) | Fedora 43, ZhiWei NA08H tablet — `bmc150_accel_core` NULL pointer dereference on interrupt-less hardware; upstream fix in v6.18 |
-| [Launchpad #2134472](https://bugs.launchpad.net/ubuntu/+bug/2134472) | [example-2.md](docs/example-2.md) | Ubuntu 24.04 Noble, GCP — `l3mdev_fib_table_rcu` NULL dereference during VRF teardown; race with ARP neighbour timer in IRQ context |
-| [lkml msgid aYN3JC_Kdgw5G2Ik@861G6M3](https://lore.kernel.org/lkml/aYN3JC_Kdgw5G2Ik@861G6M3/) | [example-3.md](docs/example-3.md) | Cloudflare Linux 6.18.7 — `VM_BUG_ON_FOLIO` in `filemap_fault`; THP folio split race placing sub-folios at wrong XArray indices; fix in v7.0-rc1, not yet in v6.18 stable |
-| [bugzilla.kernel.org #221376](https://bugzilla.kernel.org/show_bug.cgi?id=221376) | [example-4.md](docs/example-4.md) | Custom 6.18.22 kernel, AMD RX 9070 XT (RDNA4/GFX12) — `DRM_MM_BUG_ON` in `drm_mm_init`; RDNA4 removed GDS/GWS/OA resources but `amdgpu_ttm_init` unconditionally passes zero-size ranges; no upstream fix found as of v6.19 |
-| [lkml CAPHJ_VJeBAL_fk+…](https://lore.kernel.org/all/CAPHJ_VJeBAL_fk+P79guYTABZgW1hkcAz8t=c_nVK1mbn3_FYw@mail.gmail.com/) | [example-5.md](docs/example-5.md) · [patch email](docs/example-5-patch-email.txt) | Mainline 7.0.0-08391-g1d51b370a0f8, syzkaller ext4 image — `BUG_ON(pos+len > i_inline_size)` in `ext4_write_inline_data`; corrupted image bypasses inline-size guard; fix replaces `BUG_ON` with `ext4_error_inode()` |
+## 开始前准备
 
----
+一次完整 vmcore 分析需要以下输入：
 
-## Example prompts
+| 输入 | 用途 |
+|---|---|
+| `vmcore` | kdump 生成的内核内存转储。 |
+| `debuginfo.rpm` | 必须与 vmcore 内核版本精确匹配，并包含 `vmlinux`。 |
+| 内核源码目录 | 对应内核版本的源码，用于将符号和栈帧映射到源码。 |
+| `dmesg`（可选） | vmcore-dmesg 或现场保留的 dmesg 文本。 |
 
-Once installed, you can talk to the agent naturally. A few examples:
+运行环境要求：本地 CLI 需要 Python 3 和可用的 `crash` 工具；
 
-**From a saved file**
-> A customer reported a kernel oops — I saved the report in `crash.txt`.
-> Please analyse it and provide recommendations.
+## 使用方式
 
-**From the live system**
-> My local system had a kernel crash. Can you pull the crash out of `dmesg`
-> and provide a thorough analysis?
+### 本地 CLI 开发与调试
 
-**From a Launchpad bug (Ubuntu)**
-> Ubuntu bug 2148595 has a kernel crash. Can you fetch it and analyse the oops?
-
-**From the kernel Bugzilla** ([see result](docs/example-4.md))
-> Please analyse the oops in kernel.org bugzilla nr 221376.
-
-**From the Debian bug tracker**
-> Debian bug 939277 contains a kernel oops. Can you dig into the root cause?
-
-**From Red Hat / Fedora Bugzilla**
-> Fedora bug 1718414 on bugzilla.redhat.com shows a crash — what's wrong?
-
-**From an lkml / lore.kernel.org email** ([see result](docs/example-3.md))
-> An lkml post with msgid [`aYN3JC_Kdgw5G2Ik@861G6M3`](https://lore.kernel.org/lkml/aYN3JC_Kdgw5G2Ik@861G6M3/) has a kernel oops in it. Can you analyze this oops?
-
-**From a syzkaller report on lore** ([see result](docs/example-5.md))
-> Please analyze the oops in https://lore.kernel.org/all/CAPHJ_VJeBAL_fk+P79guYTABZgW1hkcAz8t=c_nVK1mbn3_FYw@mail.gmail.com/
-
----
-
-## Quick start
-
-Install the CLI in editable mode for local development:
+在仓库根目录安装 CLI：
 
 ```bash
 python3 -m pip install -e ./cli
 cra --help
 ```
 
-Build the analysis image from the repository root:
+使用固定命令集采集现场，再生成分类和路由证据：
+
+```bash
+cra vmcore collect \
+  --vmcore /data/input/vmcore \
+  --debuginfo /data/input/debuginfo.rpm \
+  --kernel /data/input/kernel \
+  --output-dir /data/output
+
+cra vmcore classify --collection /data/output/collection.json
+```
+
+如果有独立 dmesg 文件，在 `collect` 命令中追加 `--dmesg /data/input/dmesg`。
+分类完成后可针对指定 PID 或内核对象执行受记录的诊断操作：
+
+```bash
+cra vmcore diagnose task \
+  --evidence /data/output/evidence.json --pid 284533
+
+cra vmcore diagnose query \
+  --evidence /data/output/evidence.json \
+  --command 'struct xfs_buf ff257b675031dc00'
+```
+
+完整的 `collect`、`classify`、`compact-bt`、`task`、`query`、`structure` 和
+`symbol` 用法见 [CLI 文档](docs/cli/index.md)。
+
+### Docker 容器运行
+
+从仓库根目录构建包含 `crash`、JoyCode CLI、`cra` 和 Skill 的分析镜像：
 
 ```bash
 docker build -f runtime/Dockerfile -t crash-analysis:latest .
 ```
 
-For Jenkins Freestyle, copy `runtime/jenkins-workflow.sh` into an Execute
-shell step and provide vmcore, debuginfo, and kernel-source URL or PATH
-parameters. The script mounts those inputs read-only and archives
-`$WORKSPACE/output`.
+容器约定将输入挂载到 `/data/input/`：`vmcore`、`debuginfo.rpm`、`kernel`，
+可选 `dmesg`；将输出目录挂载到 `/data/output`。输入应以只读方式挂载，
+分析产物仅写入输出目录。实际的容器启动、参数校验和 JoyCode 调用由
+`runtime/jenkins-workflow.sh` 统一实现；手动调试时也应遵循这些路径约定。
 
-The CLI can also be run in the image directly:
+### Jenkins 自动化分析
 
-```bash
-cra vmcore collect --vmcore /data/input/vmcore \
-  --debuginfo /data/input/debuginfo.rpm \
-  --kernel /data/input/kernel --output-dir /data/output
-cra vmcore classify --collection /data/output/collection.json
+在 Jenkins Freestyle Job 中，将 [runtime/jenkins-workflow.sh](runtime/jenkins-workflow.sh)
+的内容粘贴到 **Build Steps → Execute shell**。将 Job 配置为参数化构建，并提供：
+
+| 参数 | 说明 |
+|---|---|
+| `VMCORE_URL` 或 `VMCORE_PATH` | 二选一，vmcore 的下载地址或 Jenkins 节点本地路径。 |
+| `DEBUG_RPM_URL` 或 `DEBUG_RPM_PATH` | 二选一，匹配的 debuginfo RPM。 |
+| `KERNEL_SRC_URL` 或 `KERNEL_SRC_PATH` | 二选一；URL 必须是 `.tar`、`.tar.gz` 或 `.tar.xz` 源码归档。 |
+| `DMESG_URL` 或 `DMESG_PATH` | 可选，外部 dmesg 文件。未提供时使用 crash log。 |
+| `RUN_JOYCODE` | 默认 `true`；设为 `false` 时仅生成证据，不运行 LLM 分析。 |
+| `JOYCODE_MODEL`、`MODEL_CONTEXT_WINDOW`、`MODEL_AUTO_COMPACT_TOKEN_LIMIT` | 可选模型与上下文配置。 |
+| `BUILD_IMAGE` | 默认 `false`；设为 `true` 时从 `REPO_ROOT` 构建 `crash-analysis:latest`。 |
+
+当 `RUN_JOYCODE=true` 时，通过 Jenkins Credentials Binding 注入 `JOYCODE_API_KEY`；
+不要将密钥写入脚本、参数默认值或仓库。脚本会准备输入、以只读方式挂载它们、
+运行容器，并归档 `$WORKSPACE/output`。若 JoyCode 未生成有效报告、`analysis.md`
+仍是占位文件或执行失败，构建会失败，而不会将“仅完成采集”误报为分析成功。
+
+## 输出与证据
+
+`--output-dir`（Jenkins 中为 `$WORKSPACE/output`）包含以下主要产物：
+
+| 产物 | 含义 |
+|---|---|
+| `collection.json` | 本次采集的输入、定位到的 `vmlinux` 和原始输出索引。 |
+| `classification.json` | 基础崩溃分类。 |
+| `routing.json` | 建议分析路由与候选 PID。 |
+| `task-index.json` | 从固定 crash 输出解析出的任务索引。 |
+| `evidence.json` | 供 Skill 使用的综合证据入口。 |
+| `focus/` | 按路由筛选后的重点文本证据。 |
+| `actions/` | 每次 `diagnose` 操作的原始输出及 `result.json`。 |
+| `queries.log` | 后续查询的审计记录。 |
+| `crash-raw.txt` | 固定 `crash` 命令生成的完整原始输出，仅在重点证据不足时查看。 |
+| `analysis.md` | 最终中文分析报告。 |
+
+`classify` 创建的 `analysis.md` 只是占位文件，不能视为分析完成。最终报告应由
+`$crash-analysis` Skill 根据 `evidence.json`、`focus/` 和诊断 action 的证据生成。
+
+## Skill：`crash-analysis`
+
+该 Skill 面向 x86 Linux 的 Oops、kernel paging request、Panic、`BUG/BUG_ON`、
+`WARNING`、vmcore 与 XFS hang 等场景。它支持：
+
+- 提取内核版本、崩溃任务、寄存器、taint、硬件信息和调用栈；
+- 通过 `gdb`、`addr2line`、`crash` 与内核源码映射崩溃位置；
+- 按 paging fault、WARNING、BUG、Panic、XFS hang 等流程开展证据驱动的分析；
+- 将上游 patch 或社区讨论作为候选线索，并区分已验证事实和待验证假设；
+- 使用 `cra vmcore diagnose` 记录补充查询，以便报告结论可以复查。
+
+主 Skill 位于 `skill/crash-analysis/`；CLI 内置副本位于
+`cli/src/crashanalysis_cli/skills/crash-analysis/`。目前两份均保留，修改其中任何一份时
+都应明确是否同步另一份，避免容器中的实际 Skill 与仓库文档不一致。
+
+## 开发与维护
+
+- 修改 `cli/`、`skill/`、`runtime/Dockerfile` 或容器入口后，重新构建镜像：
+
+  ```bash
+  docker build -f runtime/Dockerfile -t crash-analysis:latest .
+  ```
+
+- Jenkins 默认 `BUILD_IMAGE=false`，只检查并使用已有 `crash-analysis:latest` 镜像；
+  因此镜像更新后需先在开发节点构建，或明确将该参数设为 `true`。
+- Jenkins Job 中粘贴的是脚本正文；修改 `runtime/jenkins-workflow.sh` 后，需要将更新后的
+  内容重新粘贴到 Job 的 Execute shell。
+- 分析过程中的 `actions/`、`queries.log` 和 `analysis.md` 应一并归档，它们共同构成
+  可复查的结论证据链。
+
+## `cra` CLI
+
+`cra` 是分析流程中的确定性执行层：它负责准备 vmcore
+现场、运行固定或显式指定的 `crash` 命令，并将每一步的输入与输出保存为可复查产物，同时避免 LLM 在分析过程中陷入循环取证与任务超时。
+
+![`cra --help` 命令输出](docs/assets/cli.png)
+
+| 命令组 | 用途 |
+|---|---|
+| `cra vmcore collect` | 解压 debuginfo、定位 `vmlinux`、执行固定的首轮 `crash` 采集。 |
+| `cra vmcore classify` | 基于采集结果生成分类、候选路由、任务索引、重点证据和报告占位文件。 |
+| `cra vmcore diagnose` | 对既有 `evidence.json` 执行 `compact-bt`、`task`、`query`、`structure` 或 `symbol` 查询，并将结果写入 `actions/` 与 `queries.log`。 |
+| `cra skills` | 查看、安装或卸载 CLI 内置的分析 Skill。 |
+
+典型调用顺序是：
+
+```text
+cra vmcore collect
+→ cra vmcore classify
+→ $crash-analysis Skill 调用 cra vmcore diagnose
+→ $crash-analysis Skill 撰写 analysis.md
 ```
 
-The skill's detailed references, sample reports, and evaluation cases live
-under `skill/crash-analysis/`.
-
----
-
-## Skill: `crash-analysis`
-
-**Expert analysis of Linux Kernel OOPS crash reports on x86.**
-
-When a kernel crash report lands in your session — a `dmesg` snippet, a bug
-report, a log file — this skill takes over. It provides:
-
-- **Crash classification**: Oops, Panic, BUG/BUG_ON, or WARNING.
-- **Structured data extraction**: kernel version, process context, CPU
-  registers, taint flags, hardware info, and call trace in a clean table.
-- **Backtrace mapping**: resolves each call-trace entry to a source file and
-  line using `gdb` or `addr2line` against kernel debug symbols.
-- **Distribution support**: automated download and unpacking of debug symbol
-  packages for Debian, Fedora, and Ubuntu.
-- **Deep analysis flows**: "What — How — Where" protocol for root cause
-  identification; specialized flows for paging faults, WARNING, BUG, and panic.
-- **Source reporting**: abbreviated or full source listings with crash-site
-  markers, handling inlined functions and macro-expanded code correctly.
-
-Trigger phrases: *"kernel oops"*, *"kernel crash"*, *"Call Trace"*,
-*"BUG: unable to handle"*, *"WARNING: at"*, *"Kernel panic"*,
-*"paging request"*, or any `dmesg` / crash log snippet.
-
----
-
-## Installation
-
-This skill follows the open [Agent Skills standard](https://agentskills.io).
-The skill directory contains a `SKILL.md` file that any compatible agent can
-load on demand. The same directory works across GitHub Copilot (CLI and
-VS Code), Claude Code, OpenAI Codex, Gemini CLI, and other compatible agents.
-
-| Agent | Project-level path | User-level path |
-|---|---|---|
-| GitHub Copilot CLI / VS Code | `.github/skills/` | `~/.copilot/skills/` |
-| Claude Code | `.claude/skills/` | `~/.claude/skills/` |
-| OpenAI Codex | `.agents/skills/` | `~/.agents/skills/` |
-| Gemini CLI | `.gemini/skills/` | — |
-| OpenCode | `.opencode/skills/` | `~/.config/opencode/skills/` |
-
-### GitHub CLI (`gh skill`) — recommended
-
-The easiest way to install across any supported agent. Requires
-[GitHub CLI v2.90.0](https://github.com/cli/cli/releases/tag/v2.90.0) or later.
-
-```bash
-# Install for all agents (user-level)
- gh skill install intel/crash-analysis skill/crash-analysis
-
-# Install for a specific agent only
- gh skill install intel/crash-analysis skill/crash-analysis \
-    --agent copilot --scope user
-
-# Pin to a specific release tag for reproducibility
-gh skill install intel/crash-analysis skill/crash-analysis \
-    --pin v1.0.0
-```
-
-Keep it up to date:
-
-```bash
- gh skill update crash-analysis
-```
-
-### GitHub Copilot CLI
-
-Skills are installed per-user under `~/.copilot/skills/`:
-
-```bash
-cp -r skill/crash-analysis ~/.copilot/skills/
-```
-
-### GitHub Copilot in VS Code
-
-GitHub Copilot in VS Code loads skills from `.github/skills/` at project
-level or `~/.copilot/skills/` at user level. Project-level skills can be
-committed so the whole team benefits automatically:
-
-```bash
-# Project-level (commit to your repository)
-mkdir -p .github/skills
-cp -r skill/crash-analysis .github/skills/
-
-# User-level (available in every project)
-cp -r skill/crash-analysis ~/.copilot/skills/
-```
-
-VS Code also scans `.claude/skills/` and `.agents/skills/`, so a single
-project-level installation covers GitHub Copilot, Claude Code, and Codex
-simultaneously.
-
-### Claude Code
-
-Claude Code discovers skills in `.claude/skills/` (project) or
-`~/.claude/skills/` (user):
-
-```bash
-# Project-level
-mkdir -p .claude/skills
-cp -r skill/crash-analysis .claude/skills/
-
-# User-level
-cp -r skill/crash-analysis ~/.claude/skills/
-```
-
-### OpenAI Codex
-
-Codex reads skills from `.agents/skills/` at project level and from
-`~/.agents/skills/` at user level:
-
-```bash
-# Project-level
-mkdir -p .agents/skills
-cp -r skill/crash-analysis .agents/skills/
-
-# User-level
-cp -r skill/crash-analysis ~/.agents/skills/
-```
-
-### Gemini CLI
-
-Gemini CLI reads project skills from `.gemini/skills/`:
-
-```bash
-mkdir -p .gemini/skills
-cp -r skill/crash-analysis .gemini/skills/
-```
-
-### OpenCode
-
-OpenCode has native skill support and reads skills from `.opencode/skills/`:
-
-```bash
-mkdir -p .opencode/skills
-cp -r skill/crash-analysis .opencode/skills/
-```
-
-For user-level installation, copy to `~/.config/opencode/skills/` instead.
-
----
-
-## Local preparation
-
-The skill works best when a Linux kernel git tree is available locally.
-Create the working directory and clone the stable kernel tree into it once,
-before using the skill for the first time:
-
-```bash
-mkdir -p oops-workdir
-git clone https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/ \
-    oops-workdir/linux
-```
-
-If you already have a local kernel git tree (e.g. at `~/src/linux`), you can
-use it as a reference to avoid re-downloading all the objects — only the
-missing delta is transferred:
-
-```bash
-mkdir -p oops-workdir
-git clone --reference ~/src/linux \
-    https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/ \
-    oops-workdir/linux
-```
-
-> **Note:** the stable tree is several gigabytes without a reference. The
-> clone is a one-time cost — the agent will keep the tree up to date with
-> `git remote update` as needed.
-
-The agent also adds distro-specific remotes (Fedora CKI, Ubuntu kernel,
-etc.) to this same tree on demand, so a single clone serves all analyses.
-
-## Optional: semcode MCP for faster kernel code navigation
-
-The skill can use [semcode](https://github.com/masoncl/semcode-devel) — a
-semantic code-navigation MCP server — to navigate the kernel source tree
-significantly faster than manual file reads or grep. When semcode is
-available, the agent uses it for function lookup, call graph traversal,
-regex search over function bodies, and lore.kernel.org email archive search.
-
-To use it, build and index semcode against `oops-workdir/linux`:
-
-```bash
-# build semcode (requires Rust and libclang)
-git clone https://github.com/masoncl/semcode-devel
-cd semcode-devel && cargo build --release
-
-# index the kernel tree (one-time, ~several minutes)
-cd /path/to/oops-workdir/linux
-/path/to/semcode-devel/target/release/semcode-index -s .
-```
-
-Then add the MCP server to your agent configuration pointing at
-`oops-workdir/linux` as the working directory. The index is incremental —
-re-running `semcode-index -s .` after a `git pull` only scans new commits.
-
-## License
-
-See [COPYRIGHT.md](COPYRIGHT.md) for terms of use.
+通过 `cra --help`、`cra vmcore --help` 和 `cra vmcore diagnose --help` 查看可用参数；
+完整说明与命令示例见 [CLI 文档](docs/cli/index.md)。
